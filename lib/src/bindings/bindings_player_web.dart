@@ -460,6 +460,11 @@ class FlutterSoLoudWeb extends FlutterSoLoud {
   }
 
   @override
+  void setAndroidBackend(int backend) {
+    // No-op on web: the miniaudio backend choice is Android-only.
+  }
+
+  @override
   void setAudioDeviceIdleTimeout(Duration? timeout) {
     // No-op on web: the device is always kept running there (the idle-pause
     // is disabled on web to avoid stale-buffer glitches), so the idle timeout

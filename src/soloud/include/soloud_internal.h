@@ -88,6 +88,12 @@ namespace SoLoud
 	// AudioAttributes externally (e.g. via audio_session). Must be called before
 	// init. No-op effect on non-Android backends.
 	void miniaudio_setAndroidAAudioAttributes(bool aManaged);
+	// Android only: pin the miniaudio backend the context is opened with.
+	// 0 = auto (AAudio first, OpenSL fallback), 1 = AAudio, 2 = OpenSL ES;
+	// out-of-range values fall back to auto. A request for AAudio below API 30
+	// resolves to OpenSL. Must be called before init — only the init path
+	// builds a context; changeDevice reuses it. No effect on other backends.
+	void miniaudio_setAndroidBackend(unsigned int aBackend);
 	// Unconditionally stop the miniaudio output device (regardless of platform
 	// idle-pause policy or active voices) without deinitialising SoLoud or
 	// touching its voices/sources. Idempotent: no-op if already stopped.
