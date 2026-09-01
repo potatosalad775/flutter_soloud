@@ -65,8 +65,31 @@ bool OpusOutputEncoder::initialize(int sampleRate, int channels) {
     return false;
   }
 
+  // Quality knobs, applied before any audio is fed in.
+  //
+  // libopus defaults the bitrate from the sample rate and channel count,
+  // which lands well below transparency for music. 192 kbps stereo /
+  // 96 kbps mono is generous enough that a listener training their ears on
+  // the result is hearing the material, not the codec.
+  const opus_int32 bitrate =
+      m_bitrate > 0 ? static_cast<opus_int32>(m_bitrate)
+                    : (channels == 2 ? 192000 : 96000);
+  opus_encoder_ctl(encoder, OPUS_SET_BITRATE(bitrate));
+
+  if (m_complexity >= 0) {
+    opus_encoder_ctl(encoder, OPUS_SET_COMPLEXITY(m_complexity));
+  }
+
+  // The encoder invents this many samples of lookahead at the head of the
+  // stream. Advertising it as the OpusHead pre-skip is what makes a decoder
+  // throw them away; the previous hardcoded 0 left them audible.
+  opus_int32 lookahead = 0;
+  opus_encoder_ctl(encoder, OPUS_GET_LOOKAHEAD(&lookahead));
+  m_preSkip = static_cast<int32_t>(lookahead);
+
   m_engineSampleRate = sampleRate;
   m_channels = channels;
+  m_totalInputFrames = 0;
   m_resamplerLastFrame.clear();
   m_resamplerPhase = 0.0;
 
@@ -90,7 +113,7 @@ bool OpusOutputEncoder::initialize(int sampleRate, int channels) {
   std::memcpy(head, kOpusHeadMagic, 8);
   head[8] = 1;                        // version
   head[9] = static_cast<uint8_t>(channels);
-  writeLE16(head + 10, 0);            // pre-skip
+  writeLE16(head + 10, static_cast<uint16_t>(m_preSkip));  // pre-skip
   writeLE32(head + 12, m_engineSampleRate);   // original sample rate
   writeLE16(head + 16, 0);            // output gain
   head[18] = 0;                       // channel mapping family (mono/stereo)
@@ -146,6 +169,8 @@ bool OpusOutputEncoder::encode(const float *input, size_t samples,
 
   m_inputBuffer.insert(m_inputBuffer.end(), m_resampledBuffer.begin(),
                        m_resampledBuffer.end());
+  m_totalInputFrames +=
+      static_cast<int64_t>(m_resampledBuffer.size()) / m_channels;
 
   const size_t frameSamples = m_samplesPerFrame * m_channels;
   std::vector<uint8_t> packet;
@@ -166,11 +191,11 @@ bool OpusOutputEncoder::encode(const float *input, size_t samples,
     op.bytes = encodedBytes;
     op.b_o_s = 0;
     op.e_o_s = 0;
-    op.granulepos = m_packetGranulepos;
+    m_packetGranulepos += m_samplesPerFrame;
+    op.granulepos = m_packetGranulepos + m_preSkip;
     op.packetno = 2 + m_packetCount;
     ogg_stream_packetin(&m_ogg->stream, &op);
     m_packetCount++;
-    m_packetGranulepos += m_samplesPerFrame;
 
     flushPages();
 
@@ -192,9 +217,14 @@ bool OpusOutputEncoder::finalize(std::vector<uint8_t> &output) {
     return false;
   }
 
-  // Encode any remaining samples with padding if necessary.
+  // Always emit one final frame, zero-padded to the 20 ms frame size, even
+  // when the input divided evenly and nothing is left over. It carries the
+  // end-of-stream flag, which otherwise never gets set on an exactly-sized
+  // input, and its granulepos is pinned to the true input length so a decoder
+  // trims the padding instead of playing it. Pinning can only hold the
+  // granulepos level, never move it backwards, so the stream stays monotonic.
   const size_t frameSamples = m_samplesPerFrame * m_channels;
-  if (!m_inputBuffer.empty()) {
+  {
     std::vector<float> padded(frameSamples, 0.0f);
     std::copy(m_inputBuffer.begin(), m_inputBuffer.end(), padded.begin());
 
@@ -211,7 +241,7 @@ bool OpusOutputEncoder::finalize(std::vector<uint8_t> &output) {
       op.bytes = encodedBytes;
       op.b_o_s = 0;
       op.e_o_s = 1;
-      op.granulepos = m_packetGranulepos;
+      op.granulepos = m_totalInputFrames + m_preSkip;
       op.packetno = 2 + m_packetCount;
       ogg_stream_packetin(&m_ogg->stream, &op);
       m_packetCount++;
