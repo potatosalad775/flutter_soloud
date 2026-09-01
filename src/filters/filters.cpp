@@ -21,6 +21,7 @@
 #include "limiter.h"
 #include "parametric_eq_filter.h"
 #include "amplitude_modulator_filter.h"
+#include "peaking_eq_filter.h"
 
 Filters::Filters(SoLoud::Soloud *soloud, ActiveSound *sound, BusData *busData)
     : mSoloud(soloud), mSound(sound), mBusData(busData) {}
@@ -127,6 +128,13 @@ std::vector<std::string> Filters::getFilterParamNames(FilterType filterType) {
       ret.push_back(f.getParamName(i));
     }
   } break;
+  case PeakingEQFilter: {
+    PeakingEq f;
+    int nParams = f.getParamCount();
+    for (int i = 0; i < nParams; i++) {
+      ret.push_back(f.getParamName(i));
+    }
+  } break;
   }
 
   return ret;
@@ -184,6 +192,9 @@ PlayerErrors Filters::addFilter(FilterType filterType) {
     break;
   case AmplitudeModulatorFilter:
     newFilter = new AmplitudeModulator();
+    break;
+  case PeakingEQFilter:
+    newFilter = new PeakingEq();
     break;
   default:
     return filterNotFound;

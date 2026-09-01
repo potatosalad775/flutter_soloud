@@ -63,6 +63,7 @@ void main() {
       FilterType.compressorFilter: 10,
       FilterType.parametricEq: 11,
       FilterType.amplitudeModulatorFilter: 12,
+      FilterType.peakingEq: 13,
     };
     for (final MapEntry(key: type, value: index) in expected.entries) {
       expect(type.index, index, reason: '$type moved');

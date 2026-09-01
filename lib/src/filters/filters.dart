@@ -14,6 +14,7 @@ import 'package:flutter_soloud/src/filters/freeverb_filter.dart';
 import 'package:flutter_soloud/src/filters/limiter.dart';
 import 'package:flutter_soloud/src/filters/lofi_filter.dart';
 import 'package:flutter_soloud/src/filters/parametric_eq.dart';
+import 'package:flutter_soloud/src/filters/peaking_eq.dart';
 import 'package:flutter_soloud/src/filters/pitchshift_filter.dart';
 import 'package:flutter_soloud/src/filters/robotize_filter.dart';
 import 'package:flutter_soloud/src/filters/wave_shaper_filter.dart';
@@ -228,6 +229,21 @@ final class FiltersSingle {
   /// [here](https://github.com/alnitak/flutter_soloud/blob/main/src/filters/amplitude_modulator_filter.cpp)
   AmplitudeModulatorSingle get amplitudeModulatorFilter =>
       AmplitudeModulatorSingle(soundHash, busId);
+
+  /// The single-band `Peaking EQ` filter for this sound.
+  ///
+  /// **Parameters**:
+  /// - `wet`: dry/wet mix, 0..1 (default 1)
+  /// - `frequency`: centre frequency of the bell in Hz (default 1000)
+  /// - `gain`: peak gain in dB, positive boosts and negative cuts (default 0)
+  /// - `q`: Q of the bell, higher is narrower (default 1)
+  ///
+  /// The response matches the RBJ audio-EQ-cookbook peaking filter, but `wet`
+  /// scales a bandpass running alongside the dry signal instead of crossfading
+  /// two separately-filtered paths. Fading `wet` therefore leaves the recursive
+  /// coefficients untouched, so the band can be switched in and out without a
+  /// click.
+  PeakingEqSingle get peakingEqFilter => PeakingEqSingle(soundHash, busId);
 }
 
 /// Filters instance used in [SoLoud.filters]. This differentiate from the
@@ -381,6 +397,21 @@ final class FiltersGlobal {
   /// [here](https://github.com/alnitak/flutter_soloud/blob/main/src/filters/amplitude_modulator_filter.cpp)
   AmplitudeModulatorGlobal get amplitudeModulatorFilter =>
       const AmplitudeModulatorGlobal();
+
+  /// The single-band `Peaking EQ` filter used globally.
+  ///
+  /// **Parameters**:
+  /// - `wet`: dry/wet mix, 0..1 (default 1)
+  /// - `frequency`: centre frequency of the bell in Hz (default 1000)
+  /// - `gain`: peak gain in dB, positive boosts and negative cuts (default 0)
+  /// - `q`: Q of the bell, higher is narrower (default 1)
+  ///
+  /// The response matches the RBJ audio-EQ-cookbook peaking filter, but `wet`
+  /// scales a bandpass running alongside the dry signal instead of crossfading
+  /// two separately-filtered paths. Fading `wet` therefore leaves the recursive
+  /// coefficients untouched, so the band can be switched in and out without a
+  /// click.
+  PeakingEqGlobal get peakingEqFilter => const PeakingEqGlobal();
 }
 
 /// Common class for single and global filters.
@@ -549,7 +580,10 @@ enum FilterType {
   parametricEq,
 
   /// A sine ring (bipolar amplitude) modulator filter.
-  amplitudeModulatorFilter;
+  amplitudeModulatorFilter,
+
+  /// A single-band peaking (bell) equalizer filter.
+  peakingEq;
 
   @override
   String toString() => switch (this) {
@@ -566,6 +600,7 @@ enum FilterType {
     FilterType.compressorFilter => 'Compressor',
     FilterType.parametricEq => 'Parametric EQ',
     FilterType.amplitudeModulatorFilter => 'Amplitude Modulator',
+    FilterType.peakingEq => 'Peaking EQ',
   };
 
   /// The number of parameters this filter owns.
@@ -583,6 +618,7 @@ enum FilterType {
     FilterType.compressorFilter => 7,
     FilterType.parametricEq => 195,
     FilterType.amplitudeModulatorFilter => 2,
+    FilterType.peakingEq => 4,
   };
 
   /// Activate this filter. If [soundHash] is null this filter is applied
