@@ -258,6 +258,23 @@ class FlutterSoLoudWeb extends FlutterSoLoud {
   }
 
   @override
+  OfflineEncodeResult encodePcmToFile(
+    Float32List samples,
+    int sampleRate,
+    int channels,
+    MixerOutputFormat format,
+    int bitrate,
+    String outputPath,
+  ) {
+    // There is no filesystem to write to under Emscripten. A web caller that
+    // wants encoded bytes should drive an encoder through mixer capture.
+    throw UnsupportedError(
+      'encodePcmToFile() writes to the filesystem and is not supported '
+      'on the web.',
+    );
+  }
+
+  @override
   bool isMixerOutputCaptureRunning() {
     // A deinit can arrive while the WASM module is still instantiating
     // (init and deinit raced at startup): there is no capture running yet,

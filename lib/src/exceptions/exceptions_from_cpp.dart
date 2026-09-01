@@ -450,3 +450,32 @@ class SoLoudFailedToStartPlaybackCppException extends SoLoudCppException {
       'Failed to start the playback. The audio engine could not create a '
       'valid voice for this sound. (on the C++ side).';
 }
+
+/// An offline encode (`SoLoud.encodePcmToFile`) failed.
+class SoLoudOfflineEncodeCppException extends SoLoudCppException {
+  /// Creates a new [SoLoudOfflineEncodeCppException] for [result].
+  const SoLoudOfflineEncodeCppException(this.result, [super.message]);
+
+  /// The failure the encoder reported.
+  final OfflineEncodeResult result;
+
+  @override
+  String get description => switch (result) {
+    OfflineEncodeResult.ok => 'The encode succeeded (on the C++ side).',
+    OfflineEncodeResult.invalidParameter =>
+      'The PCM buffer was empty, or the sample rate or channel count was out '
+          'of range (on the C++ side).',
+    OfflineEncodeResult.unsupportedFormat =>
+      'No encoder exists for the requested format. Either the format is not '
+          'an encodable one, or this build was made with NO_XIPH_LIBS set and '
+          'the format is Opus, Vorbis or FLAC. Ref: '
+          'https://docs.page/alnitak/flutter_soloud_docs/get_started/no_xiph_libs '
+          '(on the C++ side).',
+    OfflineEncodeResult.fileError =>
+      'The output file could not be opened, or a write failed part-way. '
+          'Check the path exists and is writable (on the C++ side).',
+    OfflineEncodeResult.encoderError =>
+      'The encoder rejected the input format or a block of samples '
+          '(on the C++ side).',
+  };
+}

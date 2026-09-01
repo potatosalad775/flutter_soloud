@@ -512,6 +512,33 @@ enum BufferType {
   }
 }
 
+/// The outcome of an offline encode, mirroring `OfflineEncodeResult`
+/// in `src/mixeroutput/offline_encoder.h`.
+enum OfflineEncodeResult {
+  /// The file was written.
+  ok(0),
+
+  /// A null buffer, an empty input, or an out-of-range rate/channel count.
+  invalidParameter(1),
+
+  /// No encoder exists for the requested format, or this build was made with
+  /// `NO_XIPH_LIBS` and the format is one of the Xiph ones.
+  unsupportedFormat(2),
+
+  /// The output path could not be opened, or a write failed part-way.
+  fileError(3),
+
+  /// The encoder rejected the input format or a block of samples.
+  encoderError(4);
+
+  /// The integer value of the result.
+  final int value;
+
+  /// Constructs a valid offline encode result with [value].
+  // ignore: sort_constructors_first
+  const OfflineEncodeResult(this.value);
+}
+
 /// The output format for mixer capture.
 ///
 /// WARNING: Keep these in sync with `src/enums.h`.
