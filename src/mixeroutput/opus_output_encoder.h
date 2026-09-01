@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "mixer_output_encoder.h"
+#include "sinc_resampler.h"
 
 /// Opus encoder that produces an Ogg Opus stream.
 class OpusOutputEncoder : public MixerOutputEncoder {
@@ -55,10 +56,9 @@ class OpusOutputEncoder : public MixerOutputEncoder {
   std::unique_ptr<OggState> m_ogg;
 
   // Opus only supports 8/12/16/24/48 kHz. If the engine runs at a different
-  // rate, we resample to 48 kHz with linear interpolation.
+  // rate, we resample to 48 kHz through a windowed-sinc polyphase filter.
   int m_engineSampleRate = 48000;
-  double m_resamplerPhase = 0.0;
-  std::vector<float> m_resamplerLastFrame;
+  soloud_offline::SincResampler m_resampler;
   std::vector<float> m_resampledBuffer;
 
 #ifndef NO_XIPH_LIBS

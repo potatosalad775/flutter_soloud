@@ -90,8 +90,10 @@ bool OpusOutputEncoder::initialize(int sampleRate, int channels) {
   m_engineSampleRate = sampleRate;
   m_channels = channels;
   m_totalInputFrames = 0;
-  m_resamplerLastFrame.clear();
-  m_resamplerPhase = 0.0;
+  if (!m_resampler.init(sampleRate, 48000, channels)) {
+    opus_encoder_destroy(encoder);
+    return false;
+  }
 
   // Opus only supports 8/12/16/24/48 kHz. Always encode at 48 kHz and
   // resample the input when necessary.
@@ -217,6 +219,47 @@ bool OpusOutputEncoder::finalize(std::vector<uint8_t> &output) {
     return false;
   }
 
+  // Shift the resampler's delay line out first: without this the last kernel
+  // half-width of every file — about 24 input samples — is simply dropped.
+  std::vector<float> resamplerTail;
+  m_resampler.flush(resamplerTail);
+  if (!resamplerTail.empty()) {
+    m_inputBuffer.insert(m_inputBuffer.end(), resamplerTail.begin(),
+                         resamplerTail.end());
+    m_totalInputFrames +=
+        static_cast<int64_t>(resamplerTail.size()) / m_channels;
+  }
+
+  // The tail may have completed one or more whole frames. Emit those normally,
+  // so only a partial frame is left for the padded terminal packet below.
+  {
+    const size_t fullFrame = m_samplesPerFrame * m_channels;
+    std::vector<uint8_t> packet(1275);
+    while (m_inputBuffer.size() >= fullFrame) {
+      opus_int32 encodedBytes = opus_encode_float(
+          static_cast<OpusEncoder *>(m_encoder), m_inputBuffer.data(),
+          static_cast<int>(m_samplesPerFrame), packet.data(),
+          static_cast<opus_int32>(packet.size()));
+      if (encodedBytes < 0) {
+        return false;
+      }
+
+      ogg_packet op;
+      op.packet = packet.data();
+      op.bytes = encodedBytes;
+      op.b_o_s = 0;
+      op.e_o_s = 0;
+      m_packetGranulepos += m_samplesPerFrame;
+      op.granulepos = m_packetGranulepos + m_preSkip;
+      op.packetno = 2 + m_packetCount;
+      ogg_stream_packetin(&m_ogg->stream, &op);
+      m_packetCount++;
+
+      m_inputBuffer.erase(m_inputBuffer.begin(),
+                          m_inputBuffer.begin() + fullFrame);
+    }
+  }
+
   // Always emit one final frame, zero-padded to the 20 ms frame size, even
   // when the input divided evenly and nothing is left over. It carries the
   // end-of-stream flag, which otherwise never gets set on an exactly-sized
@@ -273,60 +316,10 @@ bool OpusOutputEncoder::finalize(std::vector<uint8_t> &output) {
 
 #ifndef NO_XIPH_LIBS
 bool OpusOutputEncoder::resampleTo48k(const float *input, size_t samples) {
-  if (m_engineSampleRate == m_sampleRate) {
-    m_resampledBuffer.assign(input, input + samples);
-    return true;
+  if (!m_resampler.isValid()) {
+    return false;
   }
-
-  const double ratio =
-      static_cast<double>(m_engineSampleRate) / static_cast<double>(m_sampleRate);
-
-  // Combine the last frame from the previous chunk with the new input so
-  // interpolation is seamless across chunk boundaries.
-  std::vector<float> combined;
-  combined.reserve(m_resamplerLastFrame.size() + samples);
-  if (!m_resamplerLastFrame.empty()) {
-    combined.insert(combined.end(), m_resamplerLastFrame.begin(),
-                    m_resamplerLastFrame.end());
-  }
-  combined.insert(combined.end(), input, input + samples);
-
-  const size_t combinedFrames = combined.size() / m_channels;
-  if (combinedFrames < 2) {
-    m_resamplerLastFrame.assign(input, input + samples);
-    m_resampledBuffer.clear();
-    return true;
-  }
-
-  m_resampledBuffer.clear();
-  double phase = m_resamplerPhase;
-
-  while (true) {
-    const double inputFrame = phase;
-    const size_t i0 = static_cast<size_t>(inputFrame);
-    const size_t i1 = i0 + 1;
-    if (i1 >= combinedFrames) {
-      break;
-    }
-
-    const float frac = static_cast<float>(inputFrame - static_cast<double>(i0));
-    const float invFrac = 1.0f - frac;
-    for (int ch = 0; ch < m_channels; ++ch) {
-      const float s0 = combined[i0 * m_channels + ch];
-      const float s1 = combined[i1 * m_channels + ch];
-      m_resampledBuffer.push_back(s0 * invFrac + s1 * frac);
-    }
-    phase += ratio;
-  }
-
-  const size_t consumedFrames = static_cast<size_t>(phase);
-  if (consumedFrames > 0) {
-    const size_t start = (consumedFrames - 1) * m_channels;
-    m_resamplerLastFrame.assign(combined.begin() + start,
-                                combined.begin() + start + m_channels);
-  }
-  m_resamplerPhase = phase - static_cast<double>(consumedFrames);
-
+  m_resampler.process(input, samples, m_resampledBuffer);
   return true;
 }
 
