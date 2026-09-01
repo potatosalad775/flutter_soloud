@@ -3161,7 +3161,8 @@ enum FilterType {
   PitchShiftFilter(8),
   LimiterFilter(9),
   CompressorFilter(10),
-  ParametricEQFilter(11);
+  ParametricEQFilter(11),
+  PeakingEQFilter(12);
 
   final int value;
   const FilterType(this.value);
@@ -3179,6 +3180,7 @@ enum FilterType {
     9 => LimiterFilter,
     10 => CompressorFilter,
     11 => ParametricEQFilter,
+    12 => PeakingEQFilter,
     _ => throw ArgumentError('Unknown value for FilterType: $value'),
   };
 }
