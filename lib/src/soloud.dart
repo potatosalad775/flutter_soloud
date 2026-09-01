@@ -214,6 +214,18 @@ Future<({PlayerErrors error, SoundHash soundHash})> _loadMemWeb({
 }
 
 @pragma('vm:entry-point')
+OfflineEncodeResult _encodePcmToFile(Map<String, dynamic> args) {
+  return SoLoudController().soLoudFFI.encodePcmToFile(
+    args['samples'] as Float32List,
+    args['sampleRate'] as int,
+    args['channels'] as int,
+    args['format'] as MixerOutputFormat,
+    args['bitrate'] as int,
+    args['outputPath'] as String,
+  );
+}
+
+@pragma('vm:entry-point')
 Float32List _readSamplesFromFile(Map<String, dynamic> args) {
   return SoLoudController().soLoudFFI.readSamplesFromFile(
     args['completeFileName'] as String,
@@ -5059,6 +5071,52 @@ interface class SoLoud {
     });
 
     return samples;
+  }
+
+  /// Encode interleaved float PCM to an audio file on disk.
+  ///
+  /// This is the offline counterpart to mixer capture: it drives the same
+  /// encoders, but over a buffer you supply rather than the live output, and
+  /// it writes the file itself. It touches no engine state, so it works
+  /// whether or not [init] has been called, and two encodes can overlap.
+  ///
+  /// The work runs on a background isolate via `compute()`, because encoding
+  /// a long file costs CPU-seconds and would otherwise stall the UI.
+  ///
+  /// [samples] interleaved float samples in [-1.0, 1.0]. Its length must be a
+  /// whole number of frames, i.e. divisible by [channels].
+  /// [sampleRate] the rate [samples] was captured at, in Hz. Opus always
+  /// encodes at 48 kHz and resamples internally; the others keep this rate.
+  /// [channels] 1 or 2. Defaults to 2.
+  /// [format] the target. Only [MixerOutputFormat.opus],
+  /// [MixerOutputFormat.vorbis], [MixerOutputFormat.flac] and
+  /// [MixerOutputFormat.wav] can encode; the raw PCM formats cannot.
+  /// [bitrate] target bits/second for the lossy formats, or 0 for the
+  /// encoder default. Ignored by FLAC and WAV.
+  /// [outputPath] the file to write. Truncated if it already exists.
+  ///
+  /// Throws [SoLoudOfflineEncodeCppException] if the encode fails, and
+  /// [UnsupportedError] on the web, which has no filesystem to write to.
+  Future<void> encodePcmToFile(
+    Float32List samples,
+    String outputPath, {
+    required int sampleRate,
+    MixerOutputFormat format = MixerOutputFormat.flac,
+    int channels = 2,
+    int bitrate = 0,
+  }) async {
+    final result = await compute(_encodePcmToFile, {
+      'samples': samples,
+      'sampleRate': sampleRate,
+      'channels': channels,
+      'format': format,
+      'bitrate': bitrate,
+      'outputPath': outputPath,
+    });
+
+    if (result != OfflineEncodeResult.ok) {
+      throw SoLoudOfflineEncodeCppException(result);
+    }
   }
 
   /// Read [numSamplesNeeded] audio data from a audio buffer equally spaced

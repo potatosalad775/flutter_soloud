@@ -11,6 +11,7 @@
 // Dart.
 #include "engine_lifecycle.h"
 #include "mixeroutput/mixer_output.h"
+#include "mixeroutput/offline_encoder.h"
 #include "mixeroutput/wav_output_encoder.h"
 #include "player.h"
 #include "soloud/include/soloud_bus.h"
@@ -798,6 +799,19 @@ extern "C"
   FFI_PLUGIN_EXPORT int isMixerCaptureRunning()
   {
     return MixerOutput::instance().isRunning() ? 1 : 0;
+  }
+
+  FFI_PLUGIN_EXPORT int encodePcmToFile(const float *pcm, int64_t sampleCount,
+                                        int sampleRate, int channels,
+                                        int format, int bitrate,
+                                        const char *outputPath)
+  {
+    // Deliberately takes no lock and touches no engine state: this path owns
+    // its own encoder instance and its own file, so it is independent of both
+    // mixer capture and engine lifetime. Two offline encodes can run at once.
+    return static_cast<int>(soloud_offline::encodePcmToFile(
+        pcm, sampleCount, sampleRate, channels,
+        static_cast<MixerOutputFormat>(format), bitrate, outputPath));
   }
 
   FFI_PLUGIN_EXPORT unsigned char *getMixerCaptureBufferPointer()

@@ -125,6 +125,29 @@ abstract class FlutterSoLoud {
   @mustBeOverridden
   void stopMixerOutputCapture();
 
+  /// Encode interleaved float PCM to a file on disk, synchronously.
+  ///
+  /// Blocks the calling thread for CPU-seconds on long inputs, so callers
+  /// must run it off the UI isolate. Touches no engine state, so it works
+  /// with no engine initialized.
+  ///
+  /// [samples] interleaved float samples in [-1.0, 1.0].
+  /// [sampleRate] input rate in Hz. Opus resamples to 48 kHz internally.
+  /// [channels] 1 or 2.
+  /// [format] only [MixerOutputFormat.opus], [MixerOutputFormat.vorbis],
+  /// [MixerOutputFormat.flac] and [MixerOutputFormat.wav] encode.
+  /// [bitrate] target bits/second for lossy formats, or 0 for the default.
+  /// [outputPath] path to write, truncated if it exists.
+  @mustBeOverridden
+  OfflineEncodeResult encodePcmToFile(
+    Float32List samples,
+    int sampleRate,
+    int channels,
+    MixerOutputFormat format,
+    int bitrate,
+    String outputPath,
+  );
+
   /// Whether mixer output capture is currently active.
   @mustBeOverridden
   bool isMixerOutputCaptureRunning();

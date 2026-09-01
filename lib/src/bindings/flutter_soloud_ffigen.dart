@@ -108,6 +108,45 @@ PlayerErrors startMixerCapture(
 @ffi.Native<ffi.Void Function()>()
 external void stopMixerCapture();
 
+/// Encode an in-memory buffer of interleaved float PCM to a file on disk.
+///
+/// The offline counterpart to mixer capture: it drives the same encoders,
+/// but over a caller-supplied buffer and writes the file itself. Nothing
+/// about the engine is touched, so it works with no engine initialized.
+///
+/// [pcm] pointer to interleaved float samples in [-1.0, 1.0].
+/// [sampleCount] total samples, i.e. frames * channels.
+/// [sampleRate] input rate in Hz. Opus resamples to 48 kHz internally.
+/// [channels] 1 or 2.
+/// [format] a [MixerOutputFormat]; only OPUS, VORBIS, FLAC and WAV encode.
+/// [bitrate] target bits/second for lossy formats, or 0 for the default.
+/// [outputPath] UTF-8 path to write, truncated if it exists.
+///
+/// Blocks for CPU-seconds on long files. Callers must keep it off any thread
+/// that renders audio or drives UI.
+///
+/// Returns an [OfflineEncodeResult].
+@ffi.Native<
+  ffi.Int Function(
+    ffi.Pointer<ffi.Float>,
+    ffi.Int64,
+    ffi.Int,
+    ffi.Int,
+    ffi.Int,
+    ffi.Int,
+    ffi.Pointer<ffi.Char>,
+  )
+>()
+external int encodePcmToFile(
+  ffi.Pointer<ffi.Float> pcm,
+  int sampleCount,
+  int sampleRate,
+  int channels,
+  int format,
+  int bitrate,
+  ffi.Pointer<ffi.Char> outputPath,
+);
+
 /// Returns 1 if mixer capture is running, 0 otherwise.
 @ffi.Native<ffi.Int Function()>()
 external int isMixerCaptureRunning();
@@ -250,7 +289,8 @@ PlayerErrors setLinuxAudioBackend(int backend) =>
 /// [backend] 0 = auto (AAudio first, OpenSL ES fallback), 1 = AAudio,
 /// 2 = OpenSL ES; out-of-range values fall back to auto. AAudio requires
 /// API >= 30, so requesting it below that resolves to OpenSL ES. Call
-/// before initEngine(). No effect on other platforms.
+/// before initEngine(); the choice survives output-device changes because
+/// only the init path builds a context. No effect on other platforms.
 @ffi.Native<ffi.Void Function(ffi.UnsignedInt)>()
 external void setAndroidBackend(int backend);
 

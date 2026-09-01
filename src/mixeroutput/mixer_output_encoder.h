@@ -45,6 +45,10 @@ class MixerOutputEncoder {
   /// Bytes per sample of the input PCM expected by this encoder.
   virtual size_t inputBytesPerSample() const = 0;
 
+  /// Request a target bitrate in bits/second, before [initialize].
+  /// Only the lossy encoders act on it; the lossless ones ignore it.
+  virtual void setBitrate(int /*bitsPerSecond*/) {}
+
   /// Create an encoder for the given format.
   /// Returns nullptr if the format is unsupported or if Xiph libs are not
   /// available.
