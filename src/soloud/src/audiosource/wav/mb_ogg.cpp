@@ -577,18 +577,195 @@ bool MBOggDecoder::rewindOpus() {
   return true;
 }
 
-bool MBOggDecoder::seekOpus(unsigned int aSample) {
-  if (!rewindOpus())
+bool MBOggDecoder::opusPageAt(unsigned int aFrom, unsigned int &aPageOffset,
+                              int64_t &aGranule, unsigned int &aPageEnd) {
+  const unsigned int fileLen = mDataSource.length();
+  if (fileLen == 0 || aFrom >= fileLen)
     return false;
-  unsigned int remaining = aSample;
+
+  // Scan for the "OggS" capture pattern in modest heap-allocated windows,
+  // then read each candidate's header directly at its own offset. Parsing
+  // headers out of the scan window instead would have to special-case a page
+  // whose segment table straddles the window edge; this cannot.
+  const unsigned int kWindow = 8192;
+  std::vector<unsigned char> window(kWindow);
+  unsigned int scanAt = aFrom;
+
+  while (scanAt < fileLen) {
+    if (!mDataSource.seek((int)scanAt))
+      return false;
+    const unsigned int got = mDataSource.read(window.data(), kWindow);
+    if (got < 4)
+      return false;
+
+    bool rescanned = false;
+    for (unsigned int i = 0; i + 4 <= got; i++) {
+      if (window[i] != 'O' || window[i + 1] != 'g' || window[i + 2] != 'g' ||
+          window[i + 3] != 'S')
+        continue;
+
+      const unsigned int pageOffset = scanAt + i;
+
+      unsigned char header[27];
+      if (!mDataSource.seek((int)pageOffset))
+        return false;
+      if (mDataSource.read(header, 27) < 27)
+        return false;
+      if (header[4] != 0)  // stream structure version
+        continue;
+
+      int64_t granule = 0;
+      for (int b = 7; b >= 0; b--)
+        granule = (granule << 8) | (int64_t)header[6 + b];
+
+      const unsigned int segCount = header[26];
+      unsigned int bodyBytes = 0;
+      if (segCount > 0) {
+        unsigned char segTable[255];
+        if (!mDataSource.seek((int)(pageOffset + 27)))
+          return false;
+        if (mDataSource.read(segTable, segCount) < segCount)
+          return false;
+        for (unsigned int sIdx = 0; sIdx < segCount; sIdx++)
+          bodyBytes += segTable[sIdx];
+      }
+
+      const unsigned int pageEnd = pageOffset + 27 + segCount + bodyBytes;
+      if (pageEnd > fileLen)
+        return false;
+
+      // -1 means no packet finishes on this page, so it carries no position
+      // worth landing on. Resume the scan after it.
+      if (granule < 0) {
+        scanAt = pageEnd;
+        rescanned = true;
+        break;
+      }
+
+      aPageOffset = pageOffset;
+      aGranule = granule;
+      aPageEnd = pageEnd;
+      return true;
+    }
+
+    if (rescanned)
+      continue;
+
+    if (got < kWindow)
+      return false;
+
+    // Keep 3 bytes of overlap so a capture pattern split across the boundary
+    // is still found.
+    scanAt += got - 3;
+  }
+
+  return false;
+}
+
+bool MBOggDecoder::restartOpusAt(unsigned int aByteOffset) {
+  if (mOpusStreamInit) {
+    ogg_stream_clear(&mOpusOs);
+    mOpusStreamInit = false;
+  }
+  ogg_sync_clear(&mOpusOy);
+  ogg_sync_init(&mOpusOy);
+  if (mOpusDecoder)
+    opus_decoder_ctl(mOpusDecoder, OPUS_RESET_STATE);
+
+  mOpusPcmBuffer.clear();
+  mOpusPcmReadPos = 0;
+
+  // The headers were parsed once by initOpus and the decoder still holds the
+  // channel count and pre-skip, so resuming mid-stream must not wait for them
+  // again. Pre-skip in particular belongs only to the true start of the
+  // stream: applying it here would eat real audio after every seek.
+  mOpusHeaderParsed = true;
+  mOpusSkipSamples = 0;
+  mOpusPacketCount = 2;
+
+  return mDataSource.seek((int)aByteOffset);
+}
+
+bool MBOggDecoder::seekOpus(unsigned int aSample) {
+  if (!mOpusDecoder)
+    return false;
+
+  // Granule positions count from the start of the pre-skip, so the granule
+  // holding output sample N is N + preSkip.
+  const int64_t preSkip = (int64_t)mOpusPreSkip;
+  const int64_t target = (int64_t)aSample + preSkip;
+
+  // Opus is a lapped transform: decoding cold at the target yields garbled
+  // output for the first frames. The spec asks for 80 ms of run-up, decoded
+  // and thrown away, before the first sample anyone hears.
+  const int64_t kPreRoll = 80 * 48;
+  const int64_t landing = target - kPreRoll;
+
+  // Where decoding will resume, and the granule already accounted for there.
+  unsigned int resumeAt = 0;
+  int64_t resumeGranule = preSkip;
+  bool landed = false;
+
+  const unsigned int fileLen = mDataSource.length();
+
+  if (landing > preSkip && fileLen > 0) {
+    // Bisect the file for the last page ending at or before the landing
+    // point. This is what makes a deep seek cost log(file) instead of
+    // decoding every sample up to it.
+    unsigned int lo = 0;
+    unsigned int hi = fileLen;
+
+    while (lo < hi) {
+      const unsigned int mid = lo + (hi - lo) / 2;
+
+      unsigned int pageOffset = 0;
+      unsigned int pageEnd = 0;
+      int64_t granule = 0;
+
+      if (!opusPageAt(mid, pageOffset, granule, pageEnd)) {
+        // Nothing usable from here on; the answer is behind us.
+        hi = mid;
+        continue;
+      }
+
+      if (granule <= landing) {
+        resumeAt = pageEnd;
+        resumeGranule = granule;
+        landed = true;
+        lo = pageEnd;  // strictly greater than mid, so this terminates
+      } else {
+        hi = mid;
+      }
+    }
+  }
+
+  if (landed) {
+    if (!restartOpusAt(resumeAt))
+      return false;
+  } else {
+    // Target is inside the first pre-roll, so there is nothing to search for:
+    // decoding from the top is both correct and cheap.
+    if (!rewindOpus())
+      return false;
+    resumeGranule = preSkip;
+  }
+
+  // Decode and discard up to the target. After a bisected landing this is at
+  // most one pre-roll plus one page of audio, not the whole file.
+  int64_t remaining = target - resumeGranule;
+  if (remaining < 0)
+    return false;
+
   float temp[512 * MAX_CHANNELS];
   while (remaining > 0) {
-    unsigned int toRead = remaining > 512 ? 512 : remaining;
-    unsigned int got = readOpus(temp, toRead, toRead);
+    const unsigned int toRead =
+        (unsigned int)(remaining > 512 ? 512 : remaining);
+    const unsigned int got = readOpus(temp, toRead, toRead);
     if (got == 0)
       break;
-    remaining -= got;
+    remaining -= (int64_t)got;
   }
+
   return remaining == 0;
 }
 
