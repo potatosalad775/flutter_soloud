@@ -78,6 +78,19 @@ namespace SoLoud
 
         bool seekOpus(unsigned int aSample);
 
+        /// Find the first Ogg page at or after byte offset [aFrom] that carries
+        /// a usable granule position, i.e. one where a packet actually
+        /// finishes. Pages with a granulepos of -1 are skipped rather than
+        /// reported, so callers never have to special-case them.
+        /// Returns false at end of file or if no valid page header is found.
+        bool opusPageAt(unsigned int aFrom, unsigned int &aPageOffset,
+                        int64_t &aGranule, unsigned int &aPageEnd);
+
+        /// Drop all decoder and Ogg framing state and resume from byte offset
+        /// [aByteOffset], which must be the start of a page. Used by the seek
+        /// path; the headers are not re-read, since initOpus already has them.
+        bool restartOpusAt(unsigned int aByteOffset);
+
         bool feedOpusData();
         bool decodeOpusPacket(ogg_packet *packet);
 
