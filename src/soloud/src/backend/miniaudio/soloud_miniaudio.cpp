@@ -291,6 +291,20 @@ namespace SoLoud
     static ma_aaudio_usage gMiniaudioAAudioUsage = ma_aaudio_usage_media;
     static ma_aaudio_content_type gMiniaudioAAudioContentType = ma_aaudio_content_type_music;
 
+    // Android only: which miniaudio backend the context is opened with.
+    // 0 = auto (SoLoud's historical preference: AAudio first, OpenSL fallback),
+    // 1 = AAudio, 2 = OpenSL ES. An explicit choice is needed because
+    // ma_context_init takes the first backend that *initializes* — on several
+    // Digital Audio Player devices AAudio initializes fine and only then
+    // glitches, so a fallback list cannot express "never AAudio". Read at
+    // device init only; changeDevice reuses the context. Defined outside the
+    // WITH_MINIAUDIO guard so the setter symbol always exists for the C
+    // bindings to call.
+    static std::atomic<unsigned int> gMiniaudioAndroidBackend{0};
+    static const unsigned int MINIAUDIO_ANDROID_BACKEND_AUTO = 0;
+    static const unsigned int MINIAUDIO_ANDROID_BACKEND_AAUDIO = 1;
+    static const unsigned int MINIAUDIO_ANDROID_BACKEND_OPENSL = 2;
+
     // Forward declarations for functions used in on_notification
     result soloud_miniaudio_pause(SoLoud::Soloud *aSoloud);
     result soloud_miniaudio_resume(SoLoud::Soloud *aSoloud);
@@ -865,6 +879,16 @@ namespace SoLoud
         gMiniaudioLowLatency.store(aLowLatency, std::memory_order_release);
     }
 
+    void miniaudio_setAndroidBackend(unsigned int aBackend)
+    {
+        std::lock_guard<std::recursive_mutex> lock(gDeviceOperationMutex);
+        gMiniaudioAndroidBackend.store(
+            aBackend > MINIAUDIO_ANDROID_BACKEND_OPENSL
+                ? MINIAUDIO_ANDROID_BACKEND_AUTO
+                : aBackend,
+            std::memory_order_release);
+    }
+
     void miniaudio_setAndroidAAudioAttributes(unsigned int aAttributes)
     {
         std::lock_guard<std::recursive_mutex> lock(gDeviceOperationMutex);
@@ -933,10 +957,18 @@ namespace SoLoud
         // OpenSL only on Android <= 10, where uninitializing an AAudio device
         // can crash (see the MA_NO_AAUDIO note at the top of this file).
         // miniaudio's default order would pick AAudio from API 27.
+        // An explicit override pins a single backend, because ma_context_init
+        // accepts the first backend that initializes, which is not the same as
+        // the first one that behaves (see gMiniaudioAndroidBackend).
+        const unsigned int requestedBackend =
+            gMiniaudioAndroidBackend.load(std::memory_order_acquire);
         ma_backend backends[] = { ma_backend_aaudio, ma_backend_opensl };
         ma_uint32 backendCount = 2;
-        if (android_get_device_api_level() <= 29) {
+        if (android_get_device_api_level() <= 29 ||
+            requestedBackend == MINIAUDIO_ANDROID_BACKEND_OPENSL) {
             backends[0] = ma_backend_opensl;
+            backendCount = 1;
+        } else if (requestedBackend == MINIAUDIO_ANDROID_BACKEND_AAUDIO) {
             backendCount = 1;
         }
         return ma_context_init(backends, backendCount, &contextConfig, aContext);

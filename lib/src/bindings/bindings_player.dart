@@ -212,6 +212,15 @@ abstract class FlutterSoLoud {
   @mustBeOverridden
   FutureOr<PlayerErrors> setLinuxAudioBackend(LinuxAudioBackend backend);
 
+  /// Android only: pin the audio backend used to open the device.
+  /// [backend] is the ordinal of `AndroidAudioBackend`: 0 = auto (AAudio
+  /// first, OpenSL ES fallback), 1 = AAudio, 2 = OpenSL ES. AAudio requires
+  /// API >= 30, so requesting it below that resolves to OpenSL ES. Call
+  /// before [initEngine]; the choice survives output-device changes. No
+  /// effect on other platforms or on web.
+  @mustBeOverridden
+  void setAndroidBackend(int backend);
+
   /// Set how long the audio output device keeps running while the engine is
   /// idle (no active voices) before it is automatically stopped, on every
   /// platform. A `null` [timeout] keeps the device running indefinitely while

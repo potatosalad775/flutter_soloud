@@ -215,6 +215,14 @@ extern "C"
   /// No effect on other platforms.
   FFI_PLUGIN_EXPORT enum PlayerErrors setLinuxAudioBackend(unsigned int backend);
 
+  /// Android only: pin the audio backend used to open the device.
+  /// [backend] 0 = auto (AAudio first, OpenSL ES fallback), 1 = AAudio,
+  /// 2 = OpenSL ES; out-of-range values fall back to auto. AAudio requires
+  /// API >= 30, so requesting it below that resolves to OpenSL ES. Call
+  /// before initEngine(); the choice survives output-device changes because
+  /// only the init path builds a context. No effect on other platforms.
+  FFI_PLUGIN_EXPORT void setAndroidBackend(unsigned int backend);
+
   /// Set how long the audio output device keeps running while the engine is
   /// idle (no active voices) before it is automatically stopped, on every
   /// platform. [timeoutMs] < 0 keeps the device running indefinitely while

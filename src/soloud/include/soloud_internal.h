@@ -94,6 +94,12 @@ namespace SoLoud
 	// 1 = ALSA, 2 = PulseAudio, 3 = JACK). No-op on other platforms.
 	void miniaudio_setLinuxAudioBackend(int aBackend);
 	int miniaudio_getLinuxAudioBackend();
+	// Android only: pin the miniaudio backend the context is opened with.
+	// 0 = auto (AAudio first, OpenSL fallback), 1 = AAudio, 2 = OpenSL ES;
+	// out-of-range values fall back to auto. A request for AAudio below API 30
+	// resolves to OpenSL. Must be called before init — only the init path
+	// builds a context; changeDevice reuses it. No effect on other backends.
+	void miniaudio_setAndroidBackend(unsigned int aBackend);
 	// Unconditionally stop the miniaudio output device (regardless of platform
 	// idle-pause policy or active voices) without deinitialising SoLoud or
 	// touching its voices/sources. Idempotent: no-op if already stopped.

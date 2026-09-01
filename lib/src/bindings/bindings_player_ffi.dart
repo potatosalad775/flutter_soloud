@@ -526,6 +526,11 @@ class FlutterSoLoudFfi extends FlutterSoLoud {
   }
 
   @override
+  void setAndroidBackend(int backend) {
+    native.setAndroidBackend(backend);
+  }
+
+  @override
   void setAudioDeviceIdleTimeout(Duration? timeout) {
     // Map the Dart Duration to the native signed-millisecond convention: null
     // (keep alive indefinitely) -> -1, and any finite duration to its

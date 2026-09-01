@@ -262,6 +262,27 @@ enum AndroidAAudioAttributes {
   final int value;
 }
 
+/// Which native audio backend SoLoud opens the output device with on Android.
+/// See [SoLoud.init]'s `androidBackend`.
+///
+/// The ordinals are sent to the native side as-is; keep them in sync with
+/// `setAndroidBackend` in `src/bindings.cpp`.
+enum AndroidAudioBackend {
+  /// Let SoLoud choose: AAudio when the device supports it (API >= 30), with
+  /// OpenSL ES as the fallback. The default, and the historical behavior.
+  auto,
+
+  /// Force AAudio. Resolves to [openSles] below API 30, where AAudio is not
+  /// available.
+  aaudio,
+
+  /// Force OpenSL ES, even on devices where AAudio would initialize. Use this
+  /// for hardware known to accept an AAudio stream and then misbehave on it —
+  /// automatic fallback cannot help there, because the backend list only
+  /// skips a backend that fails to *initialize*.
+  openSles,
+}
+
 /// The main class to call all the audio methods that play sounds.
 ///
 /// This class has a singleton [instance] which represents the (also singleton)
@@ -514,6 +535,14 @@ interface class SoLoud {
   /// should match.)
   /// Ignored when `lowLatency` is true, on non-Android platforms, and on web.
   ///
+  /// [androidBackend] (Android, native only) pins the backend used to open the
+  /// output device. Defaults to [AndroidAudioBackend.auto], which prefers
+  /// AAudio and falls back to OpenSL ES. Pass [AndroidAudioBackend.openSles]
+  /// to stay off AAudio entirely on hardware that accepts an AAudio stream and
+  /// then glitches on it — the automatic fallback only skips backends that
+  /// fail to initialize, so it cannot express that. The choice survives
+  /// output-device changes. Ignored on non-Android platforms and on web.
+  ///
   /// [devicePeriodFrames] (native only) the output device period in frames
   /// used when [renderAheadFrames] enables the render-ahead ring. Smaller
   /// values reduce the output-path jitter and the granularity at which new
@@ -536,6 +565,7 @@ interface class SoLoud {
     bool lowLatency = true,
     AndroidAAudioAttributes androidAAudioAttributes =
         AndroidAAudioAttributes.mediaMusic,
+    AndroidAudioBackend androidBackend = AndroidAudioBackend.auto,
     LinuxAudioBackend linuxAudioBackend = LinuxAudioBackend.auto,
     int? devicePeriodFrames,
     int? renderAheadFrames,
@@ -552,6 +582,7 @@ interface class SoLoud {
       channels: channels,
       lowLatency: lowLatency,
       androidAAudioAttributes: androidAAudioAttributes,
+      androidBackend: androidBackend,
       linuxAudioBackend: linuxAudioBackend,
       devicePeriodFrames: devicePeriodFrames,
       renderAheadFrames: renderAheadFrames,
@@ -574,6 +605,7 @@ interface class SoLoud {
     required Channels channels,
     required bool lowLatency,
     required AndroidAAudioAttributes androidAAudioAttributes,
+    required AndroidAudioBackend androidBackend,
     required LinuxAudioBackend linuxAudioBackend,
     required int? devicePeriodFrames,
     required int? renderAheadFrames,
@@ -598,6 +630,7 @@ interface class SoLoud {
       channels: channels,
       lowLatency: lowLatency,
       androidAAudioAttributes: androidAAudioAttributes,
+      androidBackend: androidBackend,
       linuxAudioBackend: linuxAudioBackend,
       devicePeriodFrames: devicePeriodFrames,
       renderAheadFrames: renderAheadFrames,
@@ -614,6 +647,7 @@ interface class SoLoud {
     bool lowLatency = true,
     AndroidAAudioAttributes androidAAudioAttributes =
         AndroidAAudioAttributes.mediaMusic,
+    AndroidAudioBackend androidBackend = AndroidAudioBackend.auto,
     LinuxAudioBackend linuxAudioBackend = LinuxAudioBackend.auto,
     int? devicePeriodFrames,
     int? renderAheadFrames,
@@ -701,6 +735,10 @@ interface class SoLoud {
     );
     _log.info('Setting Linux audio backend to $linuxAudioBackend');
     await _controller.soLoudFFI.setLinuxAudioBackend(linuxAudioBackend);
+
+    // Must be set before the engine opens the device: this picks the backend
+    // list handed to ma_context_init, and only the init path builds a context.
+    _controller.soLoudFFI.setAndroidBackend(androidBackend.index);
 
     // The blocking native engine/device initialization runs off the UI thread
     // (via a worker isolate inside the binding) so it no longer freezes the app

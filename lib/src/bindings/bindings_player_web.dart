@@ -460,6 +460,11 @@ class FlutterSoLoudWeb extends FlutterSoLoud {
   }
 
   @override
+  void setAndroidBackend(int backend) {
+    // No-op on web: the miniaudio backend choice is Android-only.
+  }
+
+  @override
   FutureOr<PlayerErrors> setLinuxAudioBackend(LinuxAudioBackend backend) {
     // No-op on web: Linux audio backend selection is Linux-only.
     return PlayerErrors.noError;
