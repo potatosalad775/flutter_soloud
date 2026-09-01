@@ -7,6 +7,10 @@ namespace soloud_offline {
 
 namespace {
 
+/// M_PI is not standard C++ — MSVC only defines it when _USE_MATH_DEFINES is
+/// set before <math.h>, so spell the constant out the way the other filters do.
+const double kPi = 3.14159265358979323846;
+
 /// Modified Bessel function of the first kind, order 0, by its power series.
 /// Converges quickly for the arguments a Kaiser window needs.
 double besselI0(double x) {
@@ -28,7 +32,7 @@ double normalizedSinc(double t) {
   if (std::abs(t) < 1e-12) {
     return 1.0;
   }
-  const double pit = M_PI * t;
+  const double pit = kPi * t;
   return std::sin(pit) / pit;
 }
 
