@@ -68,6 +68,8 @@ OfflineEncodeResult encodePcmToFile(const float *pcm, int64_t sampleCount,
   if (bitrate > 0) {
     encoder->setBitrate(bitrate);
   }
+  // Offline: the CPU is paid once, so take the best the encoder can do.
+  encoder->setComplexity(10);
 
   if (!encoder->initialize(sampleRate, channels)) {
     return OFFLINE_ENCODE_ENCODER_ERROR;

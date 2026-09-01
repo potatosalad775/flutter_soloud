@@ -49,6 +49,13 @@ class MixerOutputEncoder {
   /// Only the lossy encoders act on it; the lossless ones ignore it.
   virtual void setBitrate(int /*bitsPerSecond*/) {}
 
+  /// Request an encoder complexity, before [initialize].
+  ///
+  /// Offline encodes should ask for the maximum: the extra CPU is paid once
+  /// and buys real quality. The live capture path deliberately leaves this
+  /// alone, because it has a deadline to meet on every buffer.
+  virtual void setComplexity(int /*complexity*/) {}
+
   /// Create an encoder for the given format.
   /// Returns nullptr if the format is unsupported or if Xiph libs are not
   /// available.
