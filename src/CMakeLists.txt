@@ -82,6 +82,7 @@ list(APPEND PLUGIN_SOURCES
   "${SRC_DIR}/mixeroutput/mixer_output.cpp"
   "${SRC_DIR}/mixeroutput/mixer_output_encoder.cpp"
   "${SRC_DIR}/mixeroutput/offline_encoder.cpp"
+  "${SRC_DIR}/mixeroutput/sinc_resampler.cpp"
   "${SRC_DIR}/mixeroutput/pcm_converter.cpp"
   "${SRC_DIR}/mixeroutput/pcm_queue.cpp"
   "${SRC_DIR}/mixeroutput/opus_output_encoder.cpp"
