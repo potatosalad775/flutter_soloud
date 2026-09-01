@@ -172,6 +172,40 @@ void testFlacRoundTripIsExact() {
   drflac_free(decoded, nullptr);
 }
 
+void testFlacDeclaresItsLength() {
+  printf("FLAC declares its length in STREAMINFO\n");
+  const int rate = 44100;
+  const int channels = 2;
+  const std::vector<float> pcm = makeQuantizedSignal(rate, channels, 0.5);
+  const std::string path = tmpPath("offline_encode_length.flac");
+
+  check(encodePcmToFile(pcm.data(), static_cast<int64_t>(pcm.size()), rate,
+                        channels, MIXER_OUTPUT_FLAC, 0,
+                        path.c_str()) == OFFLINE_ENCODE_OK,
+        "encode succeeded");
+
+  // STREAMINFO body starts 8 bytes in ("fLaC" + block header). Sample rate,
+  // channels, bit depth and the 36-bit total_samples share the 8 bytes at
+  // offset 10 of the body.
+  std::ifstream f(path, std::ios::binary);
+  unsigned char head[26] = {0};
+  f.read(reinterpret_cast<char *>(head), 26);
+
+  uint64_t group = 0;
+  for (int i = 18; i < 26; ++i) {
+    group = (group << 8) | head[i];
+  }
+  const uint64_t totalSamples = group & ((1ULL << 36) - 1);
+  const uint64_t expected = pcm.size() / channels;
+
+  printf("  total_samples = %llu (expected %llu)\n",
+         static_cast<unsigned long long>(totalSamples),
+         static_cast<unsigned long long>(expected));
+  // A zero here is a valid FLAC file whose duration reads as unknown, which
+  // is what a decoder reports as a length of 0.
+  check(totalSamples == expected, "STREAMINFO carries the real frame count");
+}
+
 void testMonoWorks() {
   printf("mono encodes and decodes\n");
   const int rate = 48000;
@@ -323,6 +357,7 @@ void testExistingFileIsTruncated() {
 int main() {
   testWavRoundTripIsExact();
   testFlacRoundTripIsExact();
+  testFlacDeclaresItsLength();
   testMonoWorks();
   testLossyFormatsProduceValidFiles();
   testBitrateIsHonoured();
