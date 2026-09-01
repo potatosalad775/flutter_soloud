@@ -17,6 +17,7 @@ class FlacOutputEncoder : public MixerOutputEncoder {
   ~FlacOutputEncoder() override;
 
   bool initialize(int sampleRate, int channels) override;
+  void setTotalFrames(int64_t frames) override { m_totalFrames = frames; }
   bool encode(const float *input, size_t samples,
               std::vector<uint8_t> &output) override;
   bool finalize(std::vector<uint8_t> &output) override;
@@ -26,6 +27,11 @@ class FlacOutputEncoder : public MixerOutputEncoder {
   bool m_initialized = false;
   int m_sampleRate = 44100;
   int m_channels = 2;
+
+  /// Frames the caller promises to encode, or 0 when unknown (live capture).
+  /// Written into STREAMINFO so decoders can report a duration.
+  int64_t m_totalFrames = 0;
+
   std::vector<int32_t> m_inputBuffer;
   std::vector<uint8_t> m_outputAccumulator;
 

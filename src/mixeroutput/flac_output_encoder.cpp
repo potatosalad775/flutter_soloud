@@ -58,6 +58,17 @@ bool FlacOutputEncoder::initialize(int sampleRate, int channels) {
   ok = ok && FLAC__stream_encoder_set_bits_per_sample(encoder, 16);
   ok = ok && FLAC__stream_encoder_set_sample_rate(encoder, sampleRate);
 
+  // Declare the length up front when the caller knows it. libFLAC writes this
+  // into STREAMINFO when the stream is initialized; it would normally rewrite
+  // the field with the exact count at finish(), but that needs a seek callback
+  // and this encoder streams its bytes out rather than owning a file. Without
+  // it total_samples stays 0 and every decoder reports the duration as
+  // unknown — a valid file that a player cannot show a length for.
+  if (m_totalFrames > 0) {
+    ok = ok && FLAC__stream_encoder_set_total_samples_estimate(
+                   encoder, static_cast<FLAC__uint64>(m_totalFrames));
+  }
+
   if (!ok) {
     FLAC__stream_encoder_delete(encoder);
     return false;

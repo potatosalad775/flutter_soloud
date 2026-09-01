@@ -71,6 +71,10 @@ OfflineEncodeResult encodePcmToFile(const float *pcm, int64_t sampleCount,
   // Offline: the CPU is paid once, so take the best the encoder can do.
   encoder->setComplexity(10);
 
+  // Unlike live capture, an offline encode knows exactly how much audio there
+  // is. FLAC needs this to write a usable STREAMINFO.
+  encoder->setTotalFrames(sampleCount / channels);
+
   if (!encoder->initialize(sampleRate, channels)) {
     return OFFLINE_ENCODE_ENCODER_ERROR;
   }
