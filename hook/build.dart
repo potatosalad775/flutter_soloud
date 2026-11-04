@@ -21,6 +21,7 @@
 import 'dart:io';
 
 import 'package:code_assets/code_assets.dart';
+import 'package:crypto/crypto.dart';
 import 'package:hooks/hooks.dart';
 import 'package:native_toolchain_c/native_toolchain_c.dart';
 
@@ -612,6 +613,61 @@ final class XiphLink {
   static const String _defaultPrebuildTag = 'latest';
   static const String _prebuildVersionFileName =
       'flutter_soloud_prebuild_version.txt';
+  static const String _prebuildDigestFileName =
+      'flutter_soloud_prebuild_sha256.txt';
+
+  /// SHA-256 of each Xiph archive, per release. These live here rather than
+  /// being fetched from the release's own SHA256SUMS.txt, because a checksum
+  /// downloaded from the same place as the archive proves nothing.
+  static const Map<String, Map<String, String>> _prebuildSha256 = {
+    'v1.1.0': {
+      'xiph-android.tar.gz':
+          'd34792b2a411d1e83cf6dfc85e470b735f1cf86efda733ccc353168ff372e641',
+      'xiph-include.tar.gz':
+          '12b523a373112680b0fce766172531cdf057ea5faab3f37046e3dcf43b7bc032',
+      'xiph-ios.tar.gz':
+          '222d7b48cb2841e30f6d1b69a84979204e980ff474d11673ea98da0412d03c28',
+      'xiph-linux-arm64.tar.gz':
+          '4587733ba91cbd3eea9f6ef5f9d42072385c28d768da01eaee63b48c4f57be46',
+      'xiph-linux-x64.tar.gz':
+          '757c94124ee3e086b5110b138d1bfb8b25de5ed5dff807906f72a3bbd4fb60ce',
+      'xiph-macos.tar.gz':
+          '2912c2c0a4199b6589b551832b2b7f0b5faff35fe899b3a300de340eec373aca',
+      'xiph-windows-arm64.zip':
+          '0adcaa60e5192f0c0ca5e6ee3dec2099761706225aede51dc6f62b288f044145',
+      'xiph-windows-x64.zip':
+          '919d040738b9e69d14e0ea68fa1b3825777544ab6b3e8f1328bda3dfbb40f0dd',
+    },
+  };
+
+  /// The digest [archiveName] must have under [tag], or null for `latest`,
+  /// which moves and so cannot be pinned. A named release with no digest
+  /// throws: bumping `prebuild_tag` must not silently turn verification off.
+  static String? _expectedSha256(String tag, String archiveName) {
+    if (tag == _defaultPrebuildTag) return null;
+    final digest = _prebuildSha256[tag]?[archiveName];
+    if (digest == null) {
+      throw StateError(
+        '[flutter_soloud] No pinned SHA-256 for $archiveName in prebuild '
+        'release $tag. Add it to XiphLink._prebuildSha256 in hook/build.dart.',
+      );
+    }
+    return digest;
+  }
+
+  /// Archives are deleted after extraction, so the digest recorded beside the
+  /// extracted files is what ties a cache to a verified archive. A cache from
+  /// before verification has none, and is downloaded again.
+  static bool _cacheMatchesDigest(Directory dir, String? expected) {
+    if (expected == null) return true;
+    final file = File('${dir.path}/$_prebuildDigestFileName');
+    return file.existsSync() && file.readAsStringSync().trim() == expected;
+  }
+
+  static void _writeCacheDigest(Directory dir, String? digest) {
+    if (digest == null) return;
+    File('${dir.path}/$_prebuildDigestFileName').writeAsStringSync('$digest\n');
+  }
 
   static String _baseUrlForTag(String tag) => tag == 'latest'
       ? 'https://github.com/$_prebuildRepo/releases/latest/download'
@@ -646,7 +702,12 @@ final class XiphLink {
     final cacheDir = Directory.fromUri(
       packageRoot.resolve('.dart_tool/flutter_soloud/xiph/prebuild/include'),
     );
-    if (_hasHeaders(cacheDir, tag)) return cacheDir;
+    const archiveName = 'xiph-include.tar.gz';
+    final expectedSha256 = _expectedSha256(tag, archiveName);
+    if (_hasHeaders(cacheDir, tag) &&
+        _cacheMatchesDigest(cacheDir, expectedSha256)) {
+      return cacheDir;
+    }
 
     print(
       '[flutter_soloud] Downloading Xiph headers ($tag) from '
@@ -656,14 +717,16 @@ final class XiphLink {
       cacheDir.deleteSync(recursive: true);
     }
     final resolvedTag = await _downloadAndExtract(
-      '${_baseUrlForTag(tag)}/xiph-include.tar.gz',
+      '${_baseUrlForTag(tag)}/$archiveName',
       cacheDir,
       isZip: false,
+      expectedSha256: expectedSha256,
     );
     final tagToWrite = resolvedTag ?? tag;
     File(
       '${cacheDir.path}/$_prebuildVersionFileName',
     ).writeAsStringSync('$tagToWrite\n');
+    _writeCacheDigest(cacheDir, expectedSha256);
 
     File.fromUri(
         packageRoot.resolve(
@@ -697,12 +760,19 @@ final class XiphLink {
         }
       }
     }
-    if (validator(cacheDir)) return cacheDir;
+    final expectedSha256 = _expectedSha256(tag, archiveName);
+    if (validator(cacheDir) && _cacheMatchesDigest(cacheDir, expectedSha256)) {
+      return cacheDir;
+    }
 
     print(
       '[flutter_soloud] Downloading prebuilt Xiph libraries ($tag) '
       'for $os ($arch)...',
     );
+    // Extraction only overwrites, so unverified files must not stay behind.
+    if (cacheDir.existsSync()) {
+      cacheDir.deleteSync(recursive: true);
+    }
     final extractTarget = (os == OS.android)
         ? Directory.fromUri(
             packageRoot.resolve(
@@ -714,6 +784,7 @@ final class XiphLink {
       '${_baseUrlForTag(tag)}/$archiveName',
       extractTarget,
       isZip: isZip,
+      expectedSha256: expectedSha256,
     );
     final tagToWrite = resolvedTag ?? tag;
     File(
@@ -727,6 +798,7 @@ final class XiphLink {
         '${cacheDir.path}.',
       );
     }
+    _writeCacheDigest(cacheDir, expectedSha256);
     return cacheDir;
   }
 
@@ -734,6 +806,7 @@ final class XiphLink {
     String url,
     Directory destination, {
     required bool isZip,
+    required String? expectedSha256,
   }) async {
     destination.createSync(recursive: true);
     final tempFile = File(
@@ -770,6 +843,16 @@ final class XiphLink {
     }
 
     try {
+      if (expectedSha256 != null) {
+        final digest = await sha256.bind(tempFile.openRead()).first;
+        final actual = digest.toString();
+        if (actual != expectedSha256) {
+          throw StateError(
+            '[flutter_soloud] SHA-256 mismatch for $url: expected '
+            '$expectedSha256, got $actual.',
+          );
+        }
+      }
       if (isZip && Platform.isWindows) {
         final tarRes = await Process.run('tar', [
           '-xf',
