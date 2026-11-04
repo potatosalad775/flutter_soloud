@@ -275,6 +275,14 @@ class FlutterSoLoudWeb extends FlutterSoLoud {
   }
 
   @override
+  OfflineDecodeOutcome decodeFileToPcm(String path) {
+    throw UnsupportedError(
+      'decodeFileToPcm() reads from the filesystem and is not supported on '
+      'the web.',
+    );
+  }
+
+  @override
   bool isMixerOutputCaptureRunning() {
     // A deinit can arrive while the WASM module is still instantiating
     // (init and deinit raced at startup): there is no capture running yet,

@@ -479,3 +479,26 @@ class SoLoudOfflineEncodeCppException extends SoLoudCppException {
           '(on the C++ side).',
   };
 }
+
+/// An offline decode (`SoLoud.decodeFileToPcm`) failed.
+class SoLoudOfflineDecodeCppException extends SoLoudCppException {
+  /// Creates a new [SoLoudOfflineDecodeCppException] for [result].
+  const SoLoudOfflineDecodeCppException(this.result, [super.message]);
+
+  /// The failure the decoder reported.
+  final OfflineDecodeResult result;
+
+  @override
+  String get description => switch (result) {
+    OfflineDecodeResult.ok => 'The decode succeeded (on the C++ side).',
+    OfflineDecodeResult.invalidParameter =>
+      'A null pointer reached the decoder (on the C++ side).',
+    OfflineDecodeResult.fileError =>
+      'The file could not be opened or read (on the C++ side).',
+    OfflineDecodeResult.unsupportedFormat =>
+      'Nothing on this platform recognised the file, or it holds no audio '
+          '(on the C++ side).',
+    OfflineDecodeResult.decodeFailed =>
+      'The format was recognised but decoding it failed (on the C++ side).',
+  };
+}

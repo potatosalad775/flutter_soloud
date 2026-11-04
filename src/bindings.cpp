@@ -11,6 +11,7 @@
 // Dart.
 #include "engine_lifecycle.h"
 #include "mixeroutput/mixer_output.h"
+#include "mixeroutput/offline_decoder.h"
 #include "mixeroutput/offline_encoder.h"
 #include "mixeroutput/wav_output_encoder.h"
 #include "player.h"
@@ -812,6 +813,19 @@ extern "C"
     return static_cast<int>(soloud_offline::encodePcmToFile(
         pcm, sampleCount, sampleRate, channels,
         static_cast<MixerOutputFormat>(format), bitrate, outputPath));
+  }
+
+  FFI_PLUGIN_EXPORT int decodeFileToPcm(const char *path, float **samples,
+                                        int64_t *frames, int *channels,
+                                        int *sampleRate)
+  {
+    return static_cast<int>(soloud_offline::decodeFileToPcm(
+        path, samples, frames, channels, sampleRate));
+  }
+
+  FFI_PLUGIN_EXPORT void freeDecodedPcm(float *samples)
+  {
+    soloud_offline::freeDecodedPcm(samples);
   }
 
   FFI_PLUGIN_EXPORT unsigned char *getMixerCaptureBufferPointer()

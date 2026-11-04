@@ -226,6 +226,11 @@ OfflineEncodeResult _encodePcmToFile(Map<String, dynamic> args) {
 }
 
 @pragma('vm:entry-point')
+OfflineDecodeOutcome _decodeFileToPcm(String path) {
+  return SoLoudController().soLoudFFI.decodeFileToPcm(path);
+}
+
+@pragma('vm:entry-point')
 Float32List _readSamplesFromFile(Map<String, dynamic> args) {
   return SoLoudController().soLoudFFI.readSamplesFromFile(
     args['completeFileName'] as String,
@@ -5117,6 +5122,28 @@ interface class SoLoud {
     if (result != OfflineEncodeResult.ok) {
       throw SoLoudOfflineEncodeCppException(result);
     }
+  }
+
+  /// Decode a whole audio file to interleaved float PCM.
+  ///
+  /// Reads every format the engine can load into memory and keeps the file's
+  /// own channel count and sample rate, except that Ogg Opus always comes back
+  /// at 48 kHz. Unlike [readSamplesFromFile], which samples one channel for
+  /// drawing waveforms, this returns all of the audio.
+  ///
+  /// It touches no engine state, so it works whether or not [init] has been
+  /// called, and runs on a background isolate. The result takes about 21 MB per
+  /// stereo minute at 44.1 kHz.
+  ///
+  /// Throws [SoLoudOfflineDecodeCppException] if the decode fails, and
+  /// [UnsupportedError] on the web, which has no filesystem to read from.
+  Future<DecodedPcm> decodeFileToPcm(String path) async {
+    final outcome = await compute(_decodeFileToPcm, path);
+    final pcm = outcome.pcm;
+    if (outcome.result != OfflineDecodeResult.ok || pcm == null) {
+      throw SoLoudOfflineDecodeCppException(outcome.result);
+    }
+    return pcm;
   }
 
   /// Read [numSamplesNeeded] audio data from a audio buffer equally spaced

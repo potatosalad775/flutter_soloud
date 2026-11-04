@@ -148,6 +148,12 @@ abstract class FlutterSoLoud {
     String outputPath,
   );
 
+  /// Decode a whole audio file to interleaved float PCM, off-line.
+  ///
+  /// Blocks for CPU-seconds on long files, so call it from an isolate.
+  @mustBeOverridden
+  OfflineDecodeOutcome decodeFileToPcm(String path);
+
   /// Whether mixer output capture is currently active.
   @mustBeOverridden
   bool isMixerOutputCaptureRunning();

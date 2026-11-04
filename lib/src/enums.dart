@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:meta/meta.dart';
 
 /// Possible player errors.
@@ -548,6 +550,41 @@ enum OfflineEncodeResult {
   // ignore: sort_constructors_first
   const OfflineEncodeResult(this.value);
 }
+
+/// The outcome of an offline decode, mirroring `OfflineDecodeResult`
+/// in `src/mixeroutput/offline_decoder.h`.
+enum OfflineDecodeResult {
+  /// The file was decoded.
+  ok(0),
+
+  /// A null pointer reached the native side.
+  invalidParameter(1),
+
+  /// The file could not be opened or read.
+  fileError(2),
+
+  /// Nothing on this platform recognised the file, or it holds no audio.
+  unsupportedFormat(3),
+
+  /// The format was recognised but decoding it failed.
+  decodeFailed(4);
+
+  /// The integer value of the result.
+  final int value;
+
+  /// Constructs a valid offline decode result with [value].
+  // ignore: sort_constructors_first
+  const OfflineDecodeResult(this.value);
+}
+
+/// A whole file decoded by `SoLoud.decodeFileToPcm`.
+///
+/// [samples] is interleaved, so it holds `frames * channels` values.
+typedef DecodedPcm = ({Float32List samples, int sampleRate, int channels});
+
+/// What the bindings return for an offline decode: [pcm] is set only when
+/// [result] is [OfflineDecodeResult.ok].
+typedef OfflineDecodeOutcome = ({OfflineDecodeResult result, DecodedPcm? pcm});
 
 /// The output format for mixer capture.
 ///

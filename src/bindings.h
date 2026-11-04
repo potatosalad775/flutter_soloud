@@ -152,6 +152,19 @@ extern "C"
                                         int format, int bitrate,
                                         const char *outputPath);
 
+  /// Decode a whole audio file to interleaved float PCM, off-line.
+  ///
+  /// Blocks for CPU-seconds on long files. Callers must keep it off any thread
+  /// that renders audio or drives UI. Release [samples] with [freeDecodedPcm].
+  ///
+  /// Returns an [OfflineDecodeResult].
+  FFI_PLUGIN_EXPORT int decodeFileToPcm(const char *path, float **samples,
+                                        int64_t *frames, int *channels,
+                                        int *sampleRate);
+
+  /// Release a buffer returned by [decodeFileToPcm].
+  FFI_PLUGIN_EXPORT void freeDecodedPcm(float *samples);
+
   /// Returns 1 if mixer capture is running, 0 otherwise.
   FFI_PLUGIN_EXPORT int isMixerCaptureRunning();
 

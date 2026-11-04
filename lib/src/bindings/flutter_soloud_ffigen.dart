@@ -147,6 +147,33 @@ external int encodePcmToFile(
   ffi.Pointer<ffi.Char> outputPath,
 );
 
+/// Decode a whole audio file to interleaved float PCM, off-line.
+///
+/// Blocks for CPU-seconds on long files. Callers must keep it off any thread
+/// that renders audio or drives UI. Release [samples] with [freeDecodedPcm].
+///
+/// Returns an [OfflineDecodeResult].
+@ffi.Native<
+  ffi.Int Function(
+    ffi.Pointer<ffi.Char>,
+    ffi.Pointer<ffi.Pointer<ffi.Float>>,
+    ffi.Pointer<ffi.Int64>,
+    ffi.Pointer<ffi.Int>,
+    ffi.Pointer<ffi.Int>,
+  )
+>()
+external int decodeFileToPcm(
+  ffi.Pointer<ffi.Char> path,
+  ffi.Pointer<ffi.Pointer<ffi.Float>> samples,
+  ffi.Pointer<ffi.Int64> frames,
+  ffi.Pointer<ffi.Int> channels,
+  ffi.Pointer<ffi.Int> sampleRate,
+);
+
+/// Release a buffer returned by [decodeFileToPcm].
+@ffi.Native<ffi.Void Function(ffi.Pointer<ffi.Float>)>()
+external void freeDecodedPcm(ffi.Pointer<ffi.Float> samples);
+
 /// Returns 1 if mixer capture is running, 0 otherwise.
 @ffi.Native<ffi.Int Function()>()
 external int isMixerCaptureRunning();

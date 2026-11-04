@@ -447,6 +447,47 @@ class FlutterSoLoudFfi extends FlutterSoLoud {
   }
 
   @override
+  OfflineDecodeOutcome decodeFileToPcm(String path) {
+    final nativePath = path.toNativeUtf8().cast<ffi.Char>();
+    final samples = calloc<ffi.Pointer<ffi.Float>>();
+    final frames = calloc<ffi.Int64>();
+    final channels = calloc<ffi.Int>();
+    final sampleRate = calloc<ffi.Int>();
+    try {
+      final ret = native.decodeFileToPcm(
+        nativePath,
+        samples,
+        frames,
+        channels,
+        sampleRate,
+      );
+      final result = OfflineDecodeResult.values.firstWhere(
+        (r) => r.value == ret,
+        orElse: () => OfflineDecodeResult.decodeFailed,
+      );
+      if (result != OfflineDecodeResult.ok) {
+        return (result: result, pcm: null);
+      }
+
+      final count = frames.value * channels.value;
+      final pcm = (
+        samples: Float32List.fromList(samples.value.asTypedList(count)),
+        sampleRate: sampleRate.value,
+        channels: channels.value,
+      );
+      native.freeDecodedPcm(samples.value);
+      return (result: result, pcm: pcm);
+    } finally {
+      calloc
+        ..free(nativePath)
+        ..free(samples)
+        ..free(frames)
+        ..free(channels)
+        ..free(sampleRate);
+    }
+  }
+
+  @override
   bool isMixerOutputCaptureRunning() {
     return native.isMixerCaptureRunning() != 0;
   }
