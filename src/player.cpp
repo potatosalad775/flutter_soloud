@@ -6,6 +6,7 @@
 #include "filters/filters.h"
 #include "soloud.h"
 #include "soloud/include/soloud.h"
+#include "soloud_file.h"
 #include "soloud_wav.h"
 // #include "soloud_thread.h"
 #include "soloud_wavstream.h"
@@ -19,7 +20,6 @@
 #include <cmath>
 #include <cstdarg>
 #include <cstring>
-#include <fstream>
 #include <random>
 #include <thread>
 
@@ -50,26 +50,25 @@ namespace
                        std::vector<unsigned char> &bytes,
                        size_t maxBytes = 0)
     {
-        std::ifstream file(filePath, std::ios::binary | std::ios::ate);
-        if (!file.good())
+        // DiskFile rather than ifstream: it opens UTF-8 paths on Windows.
+        SoLoud::DiskFile file;
+        if (file.open(filePath.c_str()) != SoLoud::SO_NO_ERROR)
         {
             return false;
         }
 
-        std::streamoff fileSize = file.tellg();
-        if (fileSize <= 0)
+        size_t fileSize = file.length();
+        if (fileSize == 0)
         {
             return false;
         }
-        if (maxBytes > 0 && fileSize > static_cast<std::streamoff>(maxBytes))
+        if (maxBytes > 0 && fileSize > maxBytes)
         {
-            fileSize = static_cast<std::streamoff>(maxBytes);
+            fileSize = maxBytes;
         }
 
-        bytes.resize(static_cast<size_t>(fileSize));
-        file.seekg(0, std::ios::beg);
-        file.read(reinterpret_cast<char *>(bytes.data()), fileSize);
-        return file.gcount() == fileSize;
+        bytes.resize(fileSize);
+        return file.read(bytes.data(), static_cast<unsigned int>(fileSize)) == fileSize;
     }
 
     bool isOggXiphBytes(const std::vector<unsigned char> &bytes)
