@@ -815,15 +815,16 @@ extern "C"
         static_cast<MixerOutputFormat>(format), bitrate, outputPath));
   }
 
-  FFI_PLUGIN_EXPORT int decodeFileToPcm(const char *path, float **samples,
+  FFI_PLUGIN_EXPORT int decodeFileToPcm(const char *path, int64_t startMicros,
+                                        int64_t endMicros, float **samples,
                                         int64_t *frames, int *channels,
                                         int *sampleRate)
   {
     return static_cast<int>(soloud_offline::decodeFileToPcm(
-        path, samples, frames, channels, sampleRate));
+        path, startMicros, endMicros, samples, frames, channels, sampleRate));
   }
 
-  FFI_PLUGIN_EXPORT void freeDecodedPcm(float *samples)
+  FFI_PLUGIN_EXPORT void freeDecodedPcm(void *samples)
   {
     soloud_offline::freeDecodedPcm(samples);
   }

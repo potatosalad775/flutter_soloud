@@ -447,7 +447,25 @@ class FlutterSoLoudFfi extends FlutterSoLoud {
   }
 
   @override
-  OfflineDecodeOutcome decodeFileToPcm(String path) {
+  DecodedPcm decodedPcmFromOutcome(OfflineDecodeOutcome outcome) {
+    return (
+      samples: ffi.Pointer<ffi.Float>.fromAddress(outcome.address).asTypedList(
+        outcome.frames * outcome.channels,
+        finalizer: ffi.Native.addressOf<
+          ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>
+        >(native.freeDecodedPcm),
+      ),
+      sampleRate: outcome.sampleRate,
+      channels: outcome.channels,
+    );
+  }
+
+  @override
+  OfflineDecodeOutcome decodeFileToPcm(
+    String path, {
+    Duration start = Duration.zero,
+    Duration? end,
+  }) {
     final nativePath = path.toNativeUtf8().cast<ffi.Char>();
     final samples = calloc<ffi.Pointer<ffi.Float>>();
     final frames = calloc<ffi.Int64>();
@@ -456,6 +474,8 @@ class FlutterSoLoudFfi extends FlutterSoLoud {
     try {
       final ret = native.decodeFileToPcm(
         nativePath,
+        start.inMicroseconds,
+        end?.inMicroseconds ?? -1,
         samples,
         frames,
         channels,
@@ -466,17 +486,21 @@ class FlutterSoLoudFfi extends FlutterSoLoud {
         orElse: () => OfflineDecodeResult.decodeFailed,
       );
       if (result != OfflineDecodeResult.ok) {
-        return (result: result, pcm: null);
+        return (
+          result: result,
+          address: 0,
+          frames: 0,
+          channels: 0,
+          sampleRate: 0,
+        );
       }
-
-      final count = frames.value * channels.value;
-      final pcm = (
-        samples: Float32List.fromList(samples.value.asTypedList(count)),
-        sampleRate: sampleRate.value,
+      return (
+        result: result,
+        address: samples.value.address,
+        frames: frames.value,
         channels: channels.value,
+        sampleRate: sampleRate.value,
       );
-      native.freeDecodedPcm(samples.value);
-      return (result: result, pcm: pcm);
     } finally {
       calloc
         ..free(nativePath)

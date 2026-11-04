@@ -577,14 +577,22 @@ enum OfflineDecodeResult {
   const OfflineDecodeResult(this.value);
 }
 
-/// A whole file decoded by `SoLoud.decodeFileToPcm`.
+/// Audio decoded by `SoLoud.decodeFileToPcm`.
 ///
-/// [samples] is interleaved, so it holds `frames * channels` values.
+/// [samples] is interleaved, so it holds `frames * channels` values. It is backed
+/// by native memory, released once the list is garbage collected.
 typedef DecodedPcm = ({Float32List samples, int sampleRate, int channels});
 
-/// What the bindings return for an offline decode: [pcm] is set only when
-/// [result] is [OfflineDecodeResult.ok].
-typedef OfflineDecodeOutcome = ({OfflineDecodeResult result, DecodedPcm? pcm});
+/// What the decoding isolate sends back: the address of a native buffer rather
+/// than a list, so that no copy is made on the way out. All but [result] are only
+/// meaningful when it is [OfflineDecodeResult.ok].
+typedef OfflineDecodeOutcome = ({
+  OfflineDecodeResult result,
+  int address,
+  int frames,
+  int channels,
+  int sampleRate,
+});
 
 /// The output format for mixer capture.
 ///

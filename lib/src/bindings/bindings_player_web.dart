@@ -275,7 +275,19 @@ class FlutterSoLoudWeb extends FlutterSoLoud {
   }
 
   @override
-  OfflineDecodeOutcome decodeFileToPcm(String path) {
+  OfflineDecodeOutcome decodeFileToPcm(
+    String path, {
+    Duration start = Duration.zero,
+    Duration? end,
+  }) {
+    throw UnsupportedError(
+      'decodeFileToPcm() reads from the filesystem and is not supported on '
+      'the web.',
+    );
+  }
+
+  @override
+  DecodedPcm decodedPcmFromOutcome(OfflineDecodeOutcome outcome) {
     throw UnsupportedError(
       'decodeFileToPcm() reads from the filesystem and is not supported on '
       'the web.',

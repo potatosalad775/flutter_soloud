@@ -226,8 +226,14 @@ OfflineEncodeResult _encodePcmToFile(Map<String, dynamic> args) {
 }
 
 @pragma('vm:entry-point')
-OfflineDecodeOutcome _decodeFileToPcm(String path) {
-  return SoLoudController().soLoudFFI.decodeFileToPcm(path);
+OfflineDecodeOutcome _decodeFileToPcm(
+  (String path, Duration start, Duration? end) args,
+) {
+  return SoLoudController().soLoudFFI.decodeFileToPcm(
+    args.$1,
+    start: args.$2,
+    end: args.$3,
+  );
 }
 
 @pragma('vm:entry-point')
@@ -5124,26 +5130,37 @@ interface class SoLoud {
     }
   }
 
-  /// Decode a whole audio file to interleaved float PCM.
+  /// Decode an audio file, or part of one, to interleaved float PCM.
   ///
-  /// Reads every format the engine can load into memory and keeps the file's
-  /// own channel count and sample rate, except that Ogg Opus always comes back
-  /// at 48 kHz. Unlike [readSamplesFromFile], which samples one channel for
-  /// drawing waveforms, this returns all of the audio.
+  /// Reads WAV, FLAC, MP3, Ogg Vorbis, Opus and FLAC, and whatever else the
+  /// platform's codecs read, keeping the file's own channel count and sample
+  /// rate, except that Ogg Opus always comes back at 48 kHz. A file with no
+  /// signature it recognises is refused rather than guessed at. Unlike
+  /// [readSamplesFromFile], which samples one channel for drawing waveforms, this
+  /// returns all of the audio.
+  ///
+  /// [start] and [end] select a frame-exact range, with a null [end] meaning the
+  /// end of the file. Memory follows the length of the range, about 21 MB per
+  /// stereo minute at 44.1 kHz, except for platform-decoded formats such as M4A,
+  /// which hold the whole file while decoding.
   ///
   /// It touches no engine state, so it works whether or not [init] has been
-  /// called, and runs on a background isolate. The result takes about 21 MB per
-  /// stereo minute at 44.1 kHz.
+  /// called, and runs on a background isolate. The samples are native memory, and
+  /// are released when the list is garbage collected.
   ///
-  /// Throws [SoLoudOfflineDecodeCppException] if the decode fails, and
-  /// [UnsupportedError] on the web, which has no filesystem to read from.
-  Future<DecodedPcm> decodeFileToPcm(String path) async {
-    final outcome = await compute(_decodeFileToPcm, path);
-    final pcm = outcome.pcm;
-    if (outcome.result != OfflineDecodeResult.ok || pcm == null) {
+  /// Throws [SoLoudOfflineDecodeCppException] if the decode fails or the range
+  /// holds no audio, and [UnsupportedError] on the web, which has no filesystem
+  /// to read from.
+  Future<DecodedPcm> decodeFileToPcm(
+    String path, {
+    Duration start = Duration.zero,
+    Duration? end,
+  }) async {
+    final outcome = await compute(_decodeFileToPcm, (path, start, end));
+    if (outcome.result != OfflineDecodeResult.ok) {
       throw SoLoudOfflineDecodeCppException(outcome.result);
     }
-    return pcm;
+    return _controller.soLoudFFI.decodedPcmFromOutcome(outcome);
   }
 
   /// Read [numSamplesNeeded] audio data from a audio buffer equally spaced
