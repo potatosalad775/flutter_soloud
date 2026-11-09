@@ -461,6 +461,53 @@ class FlutterSoLoudFfi extends FlutterSoLoud {
   }
 
   @override
+  OfflineConvertOutcome convertFile(
+    String sourcePath,
+    String outputPath, {
+    required MixerOutputFormat format,
+    required int bitrate,
+    Duration start = Duration.zero,
+    Duration? end,
+  }) {
+    final source = sourcePath.toNativeUtf8().cast<ffi.Char>();
+    final output = outputPath.toNativeUtf8().cast<ffi.Char>();
+    final decodeResult = calloc<ffi.Int>();
+    final encodeResult = calloc<ffi.Int>();
+    final channels = calloc<ffi.Int>();
+    try {
+      native.convertFile(
+        source,
+        output,
+        start.inMicroseconds,
+        end?.inMicroseconds ?? -1,
+        format.value,
+        bitrate,
+        decodeResult,
+        encodeResult,
+        channels,
+      );
+      return (
+        decode: OfflineDecodeResult.values.firstWhere(
+          (r) => r.value == decodeResult.value,
+          orElse: () => OfflineDecodeResult.decodeFailed,
+        ),
+        encode: OfflineEncodeResult.values.firstWhere(
+          (r) => r.value == encodeResult.value,
+          orElse: () => OfflineEncodeResult.encoderError,
+        ),
+        channels: channels.value,
+      );
+    } finally {
+      calloc
+        ..free(source)
+        ..free(output)
+        ..free(decodeResult)
+        ..free(encodeResult)
+        ..free(channels);
+    }
+  }
+
+  @override
   OfflineDecodeOutcome decodeFileToPcm(
     String path, {
     Duration start = Duration.zero,

@@ -475,9 +475,30 @@ class SoLoudOfflineEncodeCppException extends SoLoudCppException {
       'The output file could not be opened, or a write failed part-way. '
           'Check the path exists and is writable (on the C++ side).',
     OfflineEncodeResult.encoderError =>
-      'The encoder rejected the input format or a block of samples '
+      'The encoder rejected the input format or a block of samples, or the '
+          'audio is too long for a WAV file (on the C++ side).',
+    OfflineEncodeResult.tooManyChannels =>
+      'The source has more channels than the encoders take, which is two '
           '(on the C++ side).',
   };
+}
+
+/// A conversion (`SoLoud.convertFile`) found more channels than the encoders
+/// take, which is two.
+///
+/// They are not mixed down, because channel order depends on the decoder that
+/// produced the audio.
+class SoLoudOfflineChannelCountCppException extends SoLoudCppException {
+  /// Creates a new [SoLoudOfflineChannelCountCppException] for [channels].
+  const SoLoudOfflineChannelCountCppException(this.channels, [super.message]);
+
+  /// How many channels the source has.
+  final int channels;
+
+  @override
+  String get description =>
+      'The source has $channels channels, and the encoders take at most two '
+      '(on the C++ side).';
 }
 
 /// An offline decode (`SoLoud.decodeFileToPcm`) failed.
@@ -492,7 +513,8 @@ class SoLoudOfflineDecodeCppException extends SoLoudCppException {
   String get description => switch (result) {
     OfflineDecodeResult.ok => 'The decode succeeded (on the C++ side).',
     OfflineDecodeResult.invalidParameter =>
-      'A null pointer reached the decoder (on the C++ side).',
+      'A null pointer or an empty or negative range reached the decoder, or a '
+          'conversion was asked to write over its own source (on the C++ side).',
     OfflineDecodeResult.fileError =>
       'The file could not be opened or read (on the C++ side).',
     OfflineDecodeResult.unsupportedFormat =>

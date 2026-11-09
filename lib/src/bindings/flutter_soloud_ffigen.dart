@@ -179,6 +179,42 @@ external int decodeFileToPcm(
 @ffi.Native<ffi.Void Function(ffi.Pointer<ffi.Void>)>()
 external void freeDecodedPcm(ffi.Pointer<ffi.Void> samples);
 
+/// Write an audio file, or the range [startMicros] to [endMicros] of it, to
+/// another file re-encoded as [format], off-line and holding no copy of the audio,
+/// except that a format only a platform codec reads is still decoded whole. A
+/// negative [endMicros] means the end.
+///
+/// Blocks for CPU-seconds on long files. Callers must keep it off any thread
+/// that renders audio or drives UI.
+///
+/// [decodeResult] an [OfflineDecodeResult].
+/// [encodeResult] an [OfflineEncodeResult]. Both are OK only on success.
+/// [channels] the source's channel count, if it got as far as being known.
+@ffi.Native<
+  ffi.Void Function(
+    ffi.Pointer<ffi.Char>,
+    ffi.Pointer<ffi.Char>,
+    ffi.Int64,
+    ffi.Int64,
+    ffi.Int,
+    ffi.Int,
+    ffi.Pointer<ffi.Int>,
+    ffi.Pointer<ffi.Int>,
+    ffi.Pointer<ffi.Int>,
+  )
+>()
+external void convertFile(
+  ffi.Pointer<ffi.Char> sourcePath,
+  ffi.Pointer<ffi.Char> outputPath,
+  int startMicros,
+  int endMicros,
+  int format,
+  int bitrate,
+  ffi.Pointer<ffi.Int> decodeResult,
+  ffi.Pointer<ffi.Int> encodeResult,
+  ffi.Pointer<ffi.Int> channels,
+);
+
 /// Returns 1 if mixer capture is running, 0 otherwise.
 @ffi.Native<ffi.Int Function()>()
 external int isMixerCaptureRunning();

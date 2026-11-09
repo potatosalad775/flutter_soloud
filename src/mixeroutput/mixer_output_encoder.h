@@ -49,15 +49,6 @@ class MixerOutputEncoder {
   /// Only the lossy encoders act on it; the lossless ones ignore it.
   virtual void setBitrate(int /*bitsPerSecond*/) {}
 
-  /// Declare the exact number of frames that will be encoded, before
-  /// [initialize].
-  ///
-  /// Only offline encodes know this. FLAC writes it into STREAMINFO, which is
-  /// what lets a decoder report the stream's length; without it the file is
-  /// valid but its duration reads as unknown. Live capture leaves it unset,
-  /// having no idea when the user will stop.
-  virtual void setTotalFrames(int64_t /*frames*/) {}
-
   /// Request an encoder complexity, before [initialize].
   ///
   /// Offline encodes should ask for the maximum: the extra CPU is paid once

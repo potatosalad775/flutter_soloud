@@ -9,25 +9,6 @@
 #include <FLAC/stream_encoder.h>
 #endif
 
-namespace {
-void flacLog(const char *msg) {
-  const char *dir = getenv("TMPDIR");
-  if (dir == nullptr) {
-    dir = getenv("HOME");
-  }
-  if (dir == nullptr) {
-    dir = "/tmp";
-  }
-  char path[1024];
-  snprintf(path, sizeof(path), "%s/flac_debug.log", dir);
-  FILE *fp = fopen(path, "a");
-  if (fp != nullptr) {
-    fprintf(fp, "%s\n", msg);
-    fclose(fp);
-  }
-}
-}  // namespace
-
 FlacOutputEncoder::FlacOutputEncoder() = default;
 
 FlacOutputEncoder::~FlacOutputEncoder() {
@@ -58,17 +39,6 @@ bool FlacOutputEncoder::initialize(int sampleRate, int channels) {
   ok = ok && FLAC__stream_encoder_set_bits_per_sample(encoder, 16);
   ok = ok && FLAC__stream_encoder_set_sample_rate(encoder, sampleRate);
 
-  // Declare the length up front when the caller knows it. libFLAC writes this
-  // into STREAMINFO when the stream is initialized; it would normally rewrite
-  // the field with the exact count at finish(), but that needs a seek callback
-  // and this encoder streams its bytes out rather than owning a file. Without
-  // it total_samples stays 0 and every decoder reports the duration as
-  // unknown — a valid file that a player cannot show a length for.
-  if (m_totalFrames > 0) {
-    ok = ok && FLAC__stream_encoder_set_total_samples_estimate(
-                   encoder, static_cast<FLAC__uint64>(m_totalFrames));
-  }
-
   if (!ok) {
     FLAC__stream_encoder_delete(encoder);
     return false;
@@ -95,13 +65,8 @@ bool FlacOutputEncoder::initialize(int sampleRate, int channels) {
 bool FlacOutputEncoder::encode(const float *input, size_t samples,
                                std::vector<uint8_t> &output) {
 #ifndef NO_XIPH_LIBS
-  flacLog("encode() called");
   if (!m_initialized || m_encoder == nullptr || input == nullptr ||
       samples == 0) {
-    char buf[256];
-    snprintf(buf, sizeof(buf), "encode() early return init=%d enc=%p samples=%zu",
-             m_initialized, m_encoder, samples);
-    flacLog(buf);
     return false;
   }
 
@@ -121,13 +86,7 @@ bool FlacOutputEncoder::encode(const float *input, size_t samples,
       static_cast<FLAC__StreamEncoder *>(m_encoder), m_inputBuffer.data(),
       frames);
 
-  char buf[256];
-  snprintf(buf, sizeof(buf), "encode() frames=%zu ok=%d output=%zu",
-           frames, ok, m_outputAccumulator.size());
-  flacLog(buf);
-
   if (!ok) {
-    flacLog("encode() process_interleaved failed");
     return false;
   }
 
@@ -141,18 +100,12 @@ bool FlacOutputEncoder::encode(const float *input, size_t samples,
 
 bool FlacOutputEncoder::finalize(std::vector<uint8_t> &output) {
 #ifndef NO_XIPH_LIBS
-  flacLog("finalize() called");
   if (!m_initialized || m_encoder == nullptr) {
-    flacLog("finalize() early return");
     return false;
   }
 
   FLAC__bool ok = FLAC__stream_encoder_finish(
       static_cast<FLAC__StreamEncoder *>(m_encoder));
-
-  char buf[256];
-  snprintf(buf, sizeof(buf), "finalize() ok=%d output=%zu", ok, m_outputAccumulator.size());
-  flacLog(buf);
 
   output.swap(m_outputAccumulator);
   m_outputAccumulator.clear();

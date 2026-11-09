@@ -295,6 +295,20 @@ class FlutterSoLoudWeb extends FlutterSoLoud {
   }
 
   @override
+  OfflineConvertOutcome convertFile(
+    String sourcePath,
+    String outputPath, {
+    required MixerOutputFormat format,
+    required int bitrate,
+    Duration start = Duration.zero,
+    Duration? end,
+  }) {
+    throw UnsupportedError(
+      'convertFile() uses the filesystem and is not supported on the web.',
+    );
+  }
+
+  @override
   bool isMixerOutputCaptureRunning() {
     // A deinit can arrive while the WASM module is still instantiating
     // (init and deinit raced at startup): there is no capture running yet,

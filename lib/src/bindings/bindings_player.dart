@@ -165,6 +165,20 @@ abstract class FlutterSoLoud {
   @mustBeOverridden
   DecodedPcm decodedPcmFromOutcome(OfflineDecodeOutcome outcome);
 
+  /// Write an audio file, or the range [start] to [end] of it, to [outputPath]
+  /// re-encoded as [format], off-line. A null [end] means the end of the file.
+  ///
+  /// Blocks for CPU-seconds on long files, so call it from an isolate.
+  @mustBeOverridden
+  OfflineConvertOutcome convertFile(
+    String sourcePath,
+    String outputPath, {
+    required MixerOutputFormat format,
+    required int bitrate,
+    Duration start = Duration.zero,
+    Duration? end,
+  });
+
   /// Whether mixer output capture is currently active.
   @mustBeOverridden
   bool isMixerOutputCaptureRunning();

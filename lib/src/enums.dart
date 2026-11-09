@@ -540,8 +540,12 @@ enum OfflineEncodeResult {
   /// The output path could not be opened, or a write failed part-way.
   fileError(3),
 
-  /// The encoder rejected the input format or a block of samples.
-  encoderError(4);
+  /// The encoder rejected the input format or a block of samples, or the audio
+  /// is too long for a WAV file, whose sizes are 32-bit.
+  encoderError(4),
+
+  /// A conversion found more channels than the encoders take, which is two.
+  tooManyChannels(5);
 
   /// The integer value of the result.
   final int value;
@@ -557,7 +561,8 @@ enum OfflineDecodeResult {
   /// The file was decoded.
   ok(0),
 
-  /// A null pointer reached the native side.
+  /// A null pointer or an empty or negative range reached the native side, or a
+  /// conversion was asked to write over its own source.
   invalidParameter(1),
 
   /// The file could not be opened or read.
@@ -592,6 +597,14 @@ typedef OfflineDecodeOutcome = ({
   int frames,
   int channels,
   int sampleRate,
+});
+
+/// What the converting isolate sends back. It succeeded only if both results are
+/// ok, and [channels] is the source's channel count once it is known.
+typedef OfflineConvertOutcome = ({
+  OfflineDecodeResult decode,
+  OfflineEncodeResult encode,
+  int channels,
 });
 
 /// The output format for mixer capture.

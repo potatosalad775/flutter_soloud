@@ -167,6 +167,22 @@ extern "C"
   /// Release a buffer returned by [decodeFileToPcm].
   FFI_PLUGIN_EXPORT void freeDecodedPcm(void *samples);
 
+  /// Write an audio file, or the range [startMicros] to [endMicros] of it, to
+  /// another file re-encoded as [format], off-line and holding no copy of the audio,
+  /// except that a format only a platform codec reads is still decoded whole. A
+  /// negative [endMicros] means the end.
+  ///
+  /// Blocks for CPU-seconds on long files. Callers must keep it off any thread
+  /// that renders audio or drives UI.
+  ///
+  /// [decodeResult] an [OfflineDecodeResult].
+  /// [encodeResult] an [OfflineEncodeResult]. Both are OK only on success.
+  /// [channels] the source's channel count, if it got as far as being known.
+  FFI_PLUGIN_EXPORT void convertFile(const char *sourcePath, const char *outputPath,
+                                     int64_t startMicros, int64_t endMicros,
+                                     int format, int bitrate, int *decodeResult,
+                                     int *encodeResult, int *channels);
+
   /// Returns 1 if mixer capture is running, 0 otherwise.
   FFI_PLUGIN_EXPORT int isMixerCaptureRunning();
 

@@ -237,6 +237,28 @@ OfflineDecodeOutcome _decodeFileToPcm(
 }
 
 @pragma('vm:entry-point')
+OfflineConvertOutcome _convertFile(
+  (
+    String sourcePath,
+    String outputPath,
+    MixerOutputFormat format,
+    int bitrate,
+    Duration start,
+    Duration? end,
+  )
+  args,
+) {
+  return SoLoudController().soLoudFFI.convertFile(
+    args.$1,
+    args.$2,
+    format: args.$3,
+    bitrate: args.$4,
+    start: args.$5,
+    end: args.$6,
+  );
+}
+
+@pragma('vm:entry-point')
 Float32List _readSamplesFromFile(Map<String, dynamic> args) {
   return SoLoudController().soLoudFFI.readSamplesFromFile(
     args['completeFileName'] as String,
@@ -5161,6 +5183,54 @@ interface class SoLoud {
       throw SoLoudOfflineDecodeCppException(outcome.result);
     }
     return _controller.soLoudFFI.decodedPcmFromOutcome(outcome);
+  }
+
+  /// Write an audio file, or part of one, to another file re-encoded as [format].
+  ///
+  /// Prefer this to [decodeFileToPcm] followed by [encodePcmToFile] for anything
+  /// long. Those hold the decoded audio natively, on the isolate that encodes it,
+  /// and in the buffer handed to the encoder: about 1.3 GB each for an hour of
+  /// stereo. This decodes straight into the encoder and holds none of it, so its
+  /// memory does not follow the length of the audio. The exception is a format only
+  /// a platform codec reads, such as M4A, which is decoded whole and so holds at
+  /// least one copy.
+  ///
+  /// Reads what [decodeFileToPcm] reads, with the same meaning for [start] and
+  /// [end]. [format] and [bitrate] are as for [encodePcmToFile].
+  ///
+  /// [outputPath] is created once there is audio for it, so a file that cannot be
+  /// read leaves anything already there alone. A failure after that removes it,
+  /// which a source can do part-way through, unlike a decode that finished before
+  /// the encode began. It may not be the source itself.
+  ///
+  /// It touches no engine state, so it works whether or not [init] has been called
+  /// and is safe while audio is playing, and it runs on a background isolate.
+  ///
+  /// Throws [SoLoudOfflineDecodeCppException] if the source cannot be read,
+  /// [SoLoudOfflineEncodeCppException] if the output cannot be written,
+  /// [SoLoudOfflineChannelCountCppException] if the source has more than two
+  /// channels, and [UnsupportedError] on the web, which has no filesystem.
+  Future<void> convertFile(
+    String sourcePath,
+    String outputPath, {
+    required MixerOutputFormat format,
+    int bitrate = 0,
+    Duration start = Duration.zero,
+    Duration? end,
+  }) async {
+    final outcome = await compute(
+      _convertFile,
+      (sourcePath, outputPath, format, bitrate, start, end),
+    );
+    if (outcome.encode == OfflineEncodeResult.tooManyChannels) {
+      throw SoLoudOfflineChannelCountCppException(outcome.channels);
+    }
+    if (outcome.decode != OfflineDecodeResult.ok) {
+      throw SoLoudOfflineDecodeCppException(outcome.decode);
+    }
+    if (outcome.encode != OfflineEncodeResult.ok) {
+      throw SoLoudOfflineEncodeCppException(outcome.encode);
+    }
   }
 
   /// Read [numSamplesNeeded] audio data from a audio buffer equally spaced

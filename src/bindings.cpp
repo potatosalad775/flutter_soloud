@@ -829,6 +829,20 @@ extern "C"
     soloud_offline::freeDecodedPcm(samples);
   }
 
+  FFI_PLUGIN_EXPORT void convertFile(const char *sourcePath, const char *outputPath,
+                                     int64_t startMicros, int64_t endMicros,
+                                     int format, int bitrate, int *decodeResult,
+                                     int *encodeResult, int *channels)
+  {
+    // Like the two above, this touches no engine state and takes no lock.
+    const soloud_offline::OfflineConvertResult result = soloud_offline::convertFile(
+        sourcePath, outputPath, startMicros, endMicros,
+        static_cast<MixerOutputFormat>(format), bitrate);
+    *decodeResult = static_cast<int>(result.decode);
+    *encodeResult = static_cast<int>(result.encode);
+    *channels = result.channels;
+  }
+
   FFI_PLUGIN_EXPORT unsigned char *getMixerCaptureBufferPointer()
   {
     return MixerOutput::instance().getBufferPointer();
