@@ -113,6 +113,35 @@ DecodedAudioData decodeFromReader(IMFSourceReader *pReader) {
             break;
         }
 
+        // What was negotiated above can be a guess. For AAC at 24 kHz and below the
+        // decoder assumes SBR and parametric stereo, reports double the rate in
+        // stereo, and only corrects that with the first sample. Believing the guess
+        // labels mono 22.05 kHz as 44.1 kHz stereo: a quarter of the length, and
+        // reported as a success.
+        if (flags & MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED) {
+            IMFMediaType *pChangedType = nullptr;
+            hr = pReader->GetCurrentMediaType(MF_SOURCE_READER_FIRST_AUDIO_STREAM, &pChangedType);
+            if (FAILED(hr)) {
+                if (pSample) pSample->Release();
+                result.errorMessage = "Failed to get changed media type";
+                return result;
+            }
+            UINT32 changedChannels = channels;
+            UINT32 changedRate = sampleRate;
+            pChangedType->GetUINT32(MF_MT_AUDIO_NUM_CHANNELS, &changedChannels);
+            pChangedType->GetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND, &changedRate);
+            pChangedType->Release();
+            // One buffer has one format, so a stream that changes after it has
+            // started cannot be represented and must not be mislabelled either.
+            if (!interleavedBuffer.empty() && (changedChannels != channels || changedRate != sampleRate)) {
+                if (pSample) pSample->Release();
+                result.errorMessage = "Audio format changed part-way through the stream";
+                return result;
+            }
+            channels = changedChannels;
+            sampleRate = changedRate;
+        }
+
         if (pSample) {
             IMFMediaBuffer *pBuffer = nullptr;
             hr = pSample->ConvertToContiguousBuffer(&pBuffer);
